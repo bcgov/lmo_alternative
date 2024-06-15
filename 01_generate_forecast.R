@@ -33,6 +33,7 @@ agg_and_save <- function(var){
   no_aggregates|>
     group_by(year, {{  var  }})|>
     summarize(employment=sum(employment))|>
+    mutate(series="historic")|>
     write_rds(here("out",paste0("historic_",as.character(substitute(var)),".rds")))
 }
 forecast_and_save <- function(var){
