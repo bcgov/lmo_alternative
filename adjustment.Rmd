@@ -1,0 +1,503 @@
+---
+title: "Margin manipulator"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(here)
+library(vroom)
+library(plotly)
+library(shiny)
+library(conflicted)
+conflicts_prefer(vroom::cols)
+conflicts_prefer(vroom::col_double)
+conflicts_prefer(vroom::col_character)
+conflicts_prefer(dplyr::filter)
+#functions--------------------------------------
+margin_plot <- function(tbbl, margin){
+  tbbl|>
+  ggplot()+
+    geom_line(aes(year, employment, colour=series, lty=series))+
+    facet_wrap(~ get(margin), scales = "free_y")+
+    labs(x=NULL,
+         y=NULL)+
+    theme_minimal()+
+    theme(text=element_text(size=13),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank())
+}
+get_total <- function(tbbl){
+   sum(tbbl$employment)
+ } 
+get_cagr <- function(tbbl, horizon){
+  max_year <- max(tbbl$year)
+  start <- tbbl$employment[tbbl$year==max_year-horizon]
+  end <-  tbbl$employment[tbbl$year==max_year]
+  if_else(start==0, 1, (end/start)^(1/horizon)) #if start=0 the data is probably shitty: assume zero growth
+}
+occ_plot <- function(pg){
+  occupation_cagrs <- post_mod_occupation()|>
+    filter(page==pg)|>
+    group_by(noc_5)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10))|>
+    select(noc_5, cagr)|>
+    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
+  
+  bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|>
+    filter(page==pg)|>
+    full_join(occupation_cagrs)|>
+    unite(noc_5, noc_5, cagr, sep=": ")|>
+    ggplot()+
+      geom_line(aes(year, employment, colour=series, lty=series))+
+      facet_wrap(~noc_5, scales = "free_y")+
+      labs(x=NULL,
+           y=NULL)+
+      theme_minimal()+
+      theme(text=element_text(size=13),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank())
+}
+
+# read in the data----------------------------
+region_historic <- read_rds(here("out","historic_bc_region.rds"))
+industry_historic <- read_rds(here("out", "historic_lmo_ind_code.rds"))
+occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
+  arrange(noc_5)|>
+  mutate(page=ntile(n=8))|>
+  group_by(page)|>
+  mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))
+noc_pages <- occupation_historic|> 
+  select(noc_5, page)|>
+  distinct()
+mod_shares <-  read_rds(here("out","modified_shares","shares.rds"))
+bc_fcast <- read_rds(here("out","bc_forecast.rds"))
+regions <- unique(region_historic$bc_region)
+industries <- unique(industry_historic$lmo_ind_code)
+occupations <- unique(occupation_historic$noc_5)
+
+```
+
+Inputs {.sidebar}
+=====================================
+
+
+```{r}
+# shiny inputs defined here
+selectInput(
+  "margin",
+  "What margin do you want to manipulate?",
+  c("bc_region", "noc_5", "lmo_ind_code"),
+  "bc_region"
+)
+```
+
+```{r}
+
+dropdown <- reactive({
+  if(input$margin=="bc_region"){
+    regions
+  }else if(input$margin=="noc_5"){
+    occupations
+  }else if(input$margin=="lmo_ind_code"){
+    industries
+  }else{
+    stop("Error: select margin")
+  }
+})
+
+renderUI({#need the renderUI because dropdown list is a reactive object
+  selectInput('item', 
+              'What item do you want to manipulate?', 
+              dropdown()
+              )
+})
+
+sliderInput("shift", "Shift up or down",
+  min = .7, max = 1.3,
+  value = 1, step = .01
+)
+sliderInput("slope", "Change slope",
+  min = .95, max = 1.03,
+  value = 1, step = .001
+)
+actionButton("save", "Save modified shares to disk")
+```
+ 
+```{r}
+#reactive elements
+shares <- reactive({
+  mod_shares|>
+      ungroup()|>
+      mutate(multiplier=if_else(get(input$margin) == input$item, 
+                                input$shift*input$slope^(year-min(year)), 
+                                1))|>
+    group_by(year)|>
+    mutate(post_mod_share=pre_mod_share*multiplier,
+           post_mod_share=post_mod_share/sum(post_mod_share))
+})
+
+pre_mod_forecast <- reactive({
+ full_join(shares(), bc_fcast)|>
+    mutate(employment=pre_mod_share*employment,
+           series="Pre modification")
+})
+
+post_mod_forecast <- reactive({
+  full_join(shares(), bc_fcast)|>
+    mutate(employment=post_mod_share*employment,
+           series="Post modification")
+})
+
+pre_mod_region <- reactive({
+  pre_mod_forecast()|>
+    group_by(year, bc_region, series)|>
+    summarize(employment=sum(employment))
+})
+
+post_mod_region <- reactive({
+  post_mod_forecast()|>
+    group_by(year, bc_region, series)|>
+    summarize(employment=sum(employment))
+})
+
+pre_mod_industry <- reactive({
+  pre_mod_forecast()|>
+    group_by(year, lmo_ind_code, series)|>
+    summarize(employment=sum(employment))
+})
+
+post_mod_industry <- reactive({
+  post_mod_forecast()|>
+    group_by(year, lmo_ind_code, series)|>
+    summarize(employment=sum(employment))
+})
+
+pre_mod_occupation <- reactive({
+  pre_mod_forecast()|>
+    group_by(year, noc_5, series)|>
+    summarize(employment=sum(employment))|>
+    full_join(noc_pages)
+})
+
+post_mod_occupation <- reactive({
+  post_mod_forecast()|>
+    group_by(year, noc_5, series)|>
+    summarize(employment=sum(employment))|>
+    full_join(noc_pages)
+})
+
+historic <- reactive({
+  if(input$margin=="bc_region"){
+    region_historic|>filter(bc_region==input$item)#|>mutate(series="historic")
+  }else if(input$margin=="noc_5"){
+    occupation_historic|>filter(noc_5==input$item)#|>mutate(series="historic")
+  }else if(input$margin=="lmo_ind_code"){
+    industry_historic|>filter(lmo_ind_code==input$item)#|>mutate(series="historic")
+  }else{
+    stop("error: historic")
+  }
+})
+
+pre_mod <- reactive({
+  if(input$margin=="bc_region"){
+    pre_mod_region()|> filter(bc_region==input$item)
+  }else if(input$margin=="noc_5"){
+    pre_mod_occupation()|> filter(noc_5==input$item)
+  }else if(input$margin=="lmo_ind_code"){
+    pre_mod_industry()|> filter(lmo_ind_code==input$item)
+  }else{
+    stop("error: pre mod")
+  }
+})
+
+post_mod <- reactive({
+  if(input$margin=="bc_region"){
+    post_mod_region()|> filter(bc_region==input$item)
+  }else if(input$margin=="noc_5"){
+    post_mod_occupation()|> filter(noc_5==input$item)
+  }else if(input$margin=="lmo_ind_code"){
+    post_mod_industry()|> filter(lmo_ind_code==input$item)
+  }else{
+    stop("error: post mod")
+  }
+})
+
+observeEvent(input$save, {
+  shares()|> #give the modified share tbbl same structure as pre_mod_share tbbl, and overwrite.
+    select(-pre_mod_share, -multiplier)|>
+    rename(pre_mod_share=post_mod_share)|>
+    write_rds(here("out","modified_shares", "shares.rds"))
+  tibble("margin"=input$margin, 
+         "item"=input$item, 
+         "shift"=input$shift, 
+         "slope"=input$slope)|>
+    write.table(here("out","change_log", "changes.csv"),
+    append = TRUE,
+    quote = TRUE,
+    sep = ",",
+    row.names = FALSE,
+    col.names = !file.exists(here("out","change_log", "changes.csv"))
+  )
+
+})
+
+```
+
+Description
+=====================================
+
+### Intro
+
+* For the BC LMO we are constrained by the Finance BC employment forecast (at least for the first 5 years)
+* Given this constraint, in effect we are forecasting proportions of BC employment.
+* There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
+* At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 64 industries, and 517 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
+* Note that this cube is extremely sparse: there are not many combinations of region, industry and occupation that have positive proportions.
+* We are typically interested in looking at two dimensions at a time: e.g. industry employment over time, aggregating over the remaining two dimensions. 
+* Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
+
+### Approach taken:
+
+*  Using LFS data from the years 2018,2019,2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+*  We then aggregate the data by each of the above margins, and calculate the 5 year CAGR (2018--2023) for each item of each margin e.g. the recent historic growth rate for the Kootenays.
+*  We then apply these marginal growth rates to adjust the baseline proportions.
+*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2018,2019,2021,2022,2023.  Suppose that region's CAGR is 2%, the industry's CAGR is 3%, and the occupation's CAGR is -4%,
+*  For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
+*  Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
+*  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
+*  Note that these unadjusted proportions will not necessarily sum to 1: we adjust so they do so.
+
+Manipulate
+=====================================  
+
+Row {data-height=900}
+-------------------------------------
+
+### 
+
+```{r}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+
+  mod_cagr <- post_mod()|>
+    get_cagr(10)
+  mod_cagr <- scales::percent(mod_cagr-1, accuracy = .1) 
+
+bind_rows(historic(), post_mod(), pre_mod())|>
+  mutate(mod_cagr=mod_cagr)|>
+  unite(facet_label, input$margin, mod_cagr, sep=": ")|>
+  ggplot()+
+    geom_line(aes(year, employment, colour=series, lty=series))+
+    facet_wrap(~facet_label)+
+    theme_minimal()
+})
+```
+
+Row {data-height=100}
+-------------------------------------
+  
+
+### Historic 5 year CAGR
+
+```{r}
+renderUI({
+  req(input$margin)
+  req(input$item)
+  hist_cagr <- historic()|>
+    get_cagr(5)
+  scales::percent(hist_cagr-1, accuracy = .1)
+})
+```
+
+### Base forecast 10 year CAGR
+    
+```{r}
+renderUI({
+  req(input$margin)
+  req(input$item)
+  base_cagr <- pre_mod()|>
+    get_cagr(10)
+  scales::percent(base_cagr-1, accuracy = .1)
+}) 
+```
+ 
+### Modified 10 year CAGR
+    
+```{r}
+renderUI({
+  req(input$margin)
+  req(input$item)
+  mod_cagr <- post_mod()|>
+    get_cagr(10)
+  scales::percent(mod_cagr-1, accuracy = .1)
+})
+```
+ 
+   
+Region
+====================================     
+
+### Regional Employment
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+
+ regional_cagrs <- post_mod_region()|>
+    group_by(bc_region)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10))|>
+    select(bc_region, cagr)|>
+    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
+  
+  bind_rows(region_historic, post_mod_region(), pre_mod_region())|>
+    full_join(regional_cagrs)|>
+    unite(bc_region, bc_region, cagr, sep=": ")|>
+    margin_plot("bc_region")
+})
+```
+
+Industry
+=====================================  
+
+### Industry Employment
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+
+ industry_cagrs <- post_mod_industry()|>
+    group_by(lmo_ind_code)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10))|>
+    select(lmo_ind_code, cagr)|>
+    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
+  
+  bind_rows(industry_historic, post_mod_industry(), pre_mod_industry())|>
+    full_join(industry_cagrs)|>
+    unite(lmo_ind_code, lmo_ind_code, cagr, sep=": ")|>
+    margin_plot("lmo_ind_code")
+})
+``` 
+
+   
+`r unique(occupation_historic$page_description[occupation_historic$page==1])`
+=====================================     
+
+### 
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(1)
+})
+``` 
+    
+`r unique(occupation_historic$page_description[occupation_historic$page==2])`
+=====================================     
+
+### 
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(2)
+})
+``` 
+ 
+`r unique(occupation_historic$page_description[occupation_historic$page==3])`
+=====================================     
+
+### 
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(3)
+})
+```  
+
+`r unique(occupation_historic$page_description[occupation_historic$page==4])`
+=====================================     
+
+### 
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(4)
+})
+```
+
+`r unique(occupation_historic$page_description[occupation_historic$page==5])`
+=====================================     
+
+###  
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(5)
+})
+```
+
+`r unique(occupation_historic$page_description[occupation_historic$page==6])`
+=====================================     
+
+###  
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(6)
+})
+```
+
+`r unique(occupation_historic$page_description[occupation_historic$page==7])`
+=====================================     
+
+###  
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(7)
+})
+```
+
+`r unique(occupation_historic$page_description[occupation_historic$page==8])`
+=====================================     
+
+###  
+ 
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(8)
+})
+```
+
+
+
