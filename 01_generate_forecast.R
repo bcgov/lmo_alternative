@@ -29,12 +29,12 @@ get_factor <- function(tbbl, horizon, cagr_weight){
   year <- (max_year+1):(max_year+11)
   tibble(year=year, factor=factor)
 }
-agg_and_save <- function(var){
+agg_and_save <- function(var1, var2=NULL){
   no_aggregates|>
-    group_by(year, {{  var  }})|>
+    group_by(year, {{  var1  }}, {{  var2  }})|>
     summarize(employment=sum(employment))|>
     mutate(series="historic")|>
-    write_rds(here("out",paste0("historic_",as.character(substitute(var)),".rds")))
+    write_rds(here("out",paste0("historic_",as.character(substitute(var1)),".rds")))
 }
 forecast_and_save <- function(var){
   pre_mod_shares|>
@@ -157,7 +157,7 @@ no_aggregates <- lfs|>
   tibble()
 
 agg_and_save(bc_region)
-agg_and_save(lmo_ind_code)
+agg_and_save(lmo_ind_code, lmo_detailed_industry)
 agg_and_save(noc_5)
 
 
