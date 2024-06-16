@@ -9,7 +9,7 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 
 #constants---------------------
-regional_weight <- .5
+regional_weight <- .25
 industry_weight <- .25
 occupation_weight <- .1
 

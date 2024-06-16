@@ -1,5 +1,5 @@
 ---
-title: "Proportion Forecast"
+title: "Forecasting proportions of total employment"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
@@ -325,7 +325,7 @@ Description
 *  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
 *  Note that these unadjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
-Manipulate
+Manipulate a cell
 =====================================  
 
 Row {data-height=900}
@@ -404,7 +404,7 @@ renderUI({
 ```
  
    
-Region
+Region timeplots
 ====================================     
 
 ### Regional Employment
@@ -420,7 +420,7 @@ renderPlotly({
 })
 ```
 
-Industry
+Industry timeplots
 =====================================  
 
 ### Industry Employment
@@ -436,12 +436,14 @@ renderPlotly({
 })
 ``` 
 
+Occupation timeplots
+=====================================
+ 
+ Row {.tabset}
+-------------------------------------
    
-`r unique(occupation_historic$page_description[occupation_historic$page==1])`
-=====================================     
-
-### 
-
+### `r unique(occupation_historic$page_description[occupation_historic$page==1])`
+    
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -449,11 +451,8 @@ renderPlotly({
 occ_plot(1)
 })
 ``` 
-    
-`r unique(occupation_historic$page_description[occupation_historic$page==2])`
-=====================================     
 
-### 
+### `r unique(occupation_historic$page_description[occupation_historic$page==2])`
  
 ```{r, fig.retina=2}
 renderPlotly({
@@ -463,11 +462,8 @@ occ_plot(2)
 })
 ``` 
  
-`r unique(occupation_historic$page_description[occupation_historic$page==3])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==3])`
 
-### 
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -476,11 +472,8 @@ occ_plot(3)
 })
 ```  
 
-`r unique(occupation_historic$page_description[occupation_historic$page==4])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==4])`
 
-### 
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -489,11 +482,8 @@ occ_plot(4)
 })
 ```
 
-`r unique(occupation_historic$page_description[occupation_historic$page==5])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==5])`
 
-###  
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -502,11 +492,8 @@ occ_plot(5)
 })
 ```
 
-`r unique(occupation_historic$page_description[occupation_historic$page==6])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==6])`
 
-###  
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -515,11 +502,8 @@ occ_plot(6)
 })
 ```
 
-`r unique(occupation_historic$page_description[occupation_historic$page==7])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==7])`
 
-###  
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -528,11 +512,8 @@ occ_plot(7)
 })
 ```
 
-`r unique(occupation_historic$page_description[occupation_historic$page==8])`
-=====================================     
+### `r unique(occupation_historic$page_description[occupation_historic$page==8])`
 
-###  
- 
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -541,7 +522,7 @@ occ_plot(8)
 })
 ```
 
-Region Scatter
+Region growth vs. share
 =======================================
 
 ```{r}
@@ -573,7 +554,7 @@ renderPlotly({
 })
 ```
 
-Industry Scatter
+Industry growth vs. share
 =============================================
 
 ```{r}
@@ -605,7 +586,7 @@ renderPlotly({
 })
 ```
 
-Occupation Scatter
+Occupation growth vs. share
 =============================================
 
 ```{r}
