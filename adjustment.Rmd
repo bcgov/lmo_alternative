@@ -1,5 +1,5 @@
 ---
-title: "Margin manipulator"
+title: "Proportion Forecast"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
@@ -20,10 +20,20 @@ conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
 #functions--------------------------------------
-margin_plot <- function(tbbl, margin){
-  tbbl|>
+margin_plot <- function(tbbl, margin, text){
+  plt <- tbbl|>
   ggplot()+
-    geom_line(aes(year, employment, colour=series, lty=series))+
+    geom_line(aes(year, 
+                  employment, 
+                  colour=series, 
+                  lty=series,
+                  group=series,
+                  text=paste0(
+                    get(text),
+                    "\n Employment: ",
+                    scales::comma(employment, accuracy = 1),
+                    "\n Year: ",
+                    year)))+
     facet_wrap(~ get(margin), scales = "free_y")+
     labs(x=NULL,
          y=NULL)+
@@ -33,6 +43,7 @@ margin_plot <- function(tbbl, margin){
           axis.ticks.x=element_blank(),
           axis.text.y=element_blank(),
           axis.ticks.y=element_blank())
+  ggplotly(plt, tooltip = "text")
 }
 get_total <- function(tbbl){
    sum(tbbl$employment)
@@ -44,20 +55,24 @@ get_cagr <- function(tbbl, horizon){
   if_else(start==0, 1, (end/start)^(1/horizon)) #if start=0 the data is probably shitty: assume zero growth
 }
 occ_plot <- function(pg){
-  occupation_cagrs <- post_mod_occupation()|>
+  plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|>
     filter(page==pg)|>
-    group_by(noc_5)|>
-    nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10))|>
-    select(noc_5, cagr)|>
-    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
-  
-  bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|>
-    filter(page==pg)|>
-    full_join(occupation_cagrs)|>
+    left_join(noc_descriptions)|>
+    left_join(occupation_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
     unite(noc_5, noc_5, cagr, sep=": ")|>
     ggplot()+
-      geom_line(aes(year, employment, colour=series, lty=series))+
+      geom_line(aes(year, 
+                    employment, 
+                    colour=series, 
+                    lty=series,
+                    group=series,
+                    text=paste0(class_title,
+                                "\n Employment: ",
+                                scales::comma(employment, accuracy = 1),
+                                "\n Year: ",
+                                year)
+                    )
+                )+
       facet_wrap(~noc_5, scales = "free_y")+
       labs(x=NULL,
            y=NULL)+
@@ -67,18 +82,25 @@ occ_plot <- function(pg){
             axis.ticks.x=element_blank(),
             axis.text.y=element_blank(),
             axis.ticks.y=element_blank())
+  ggplotly(plt, tooltip = "text")
 }
 
 # read in the data----------------------------
+noc_descriptions <- vroom(here("data", "mapping","noc21descriptions.csv"), 
+                          col_types = cols(noc_5 = col_character(), class_title = col_character()),
+                          delim=",")|>
+  mutate(noc_5=str_pad(noc_5, width=5, pad="0"))
+
 region_historic <- read_rds(here("out","historic_bc_region.rds"))
 industry_historic <- read_rds(here("out", "historic_lmo_ind_code.rds"))
 occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
+  full_join(noc_descriptions)|>
   arrange(noc_5)|>
   mutate(page=ntile(n=8))|>
   group_by(page)|>
   mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))
 noc_pages <- occupation_historic|> 
-  select(noc_5, page)|>
+  select(noc_5, class_title, page)|>
   distinct()
 mod_shares <-  read_rds(here("out","modified_shares","shares.rds"))
 bc_fcast <- read_rds(here("out","bc_forecast.rds"))
@@ -173,13 +195,13 @@ post_mod_region <- reactive({
 
 pre_mod_industry <- reactive({
   pre_mod_forecast()|>
-    group_by(year, lmo_ind_code, series)|>
+    group_by(year, lmo_ind_code, lmo_detailed_industry, series)|>
     summarize(employment=sum(employment))
 })
 
 post_mod_industry <- reactive({
   post_mod_forecast()|>
-    group_by(year, lmo_ind_code, series)|>
+    group_by(year, lmo_ind_code, lmo_detailed_industry, series)|>
     summarize(employment=sum(employment))
 })
 
@@ -252,6 +274,31 @@ observeEvent(input$save, {
 
 })
 
+regional_cagrs <- reactive({
+  post_mod_region()|>
+    group_by(bc_region)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10),
+           cagr=cagr-1)|>
+    select(bc_region, cagr)
+})
+industry_cagrs <- reactive({
+  post_mod_industry()|>
+    group_by(lmo_ind_code)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10), 
+           cagr=cagr-1)|>
+    select(lmo_ind_code, cagr)
+})
+
+occupation_cagrs <- reactive({
+  post_mod_occupation()|>
+    group_by(noc_5)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr, 10), 
+           cagr=cagr-1)|>
+    select(noc_5, cagr)      
+})
 ```
 
 Description
@@ -295,13 +342,24 @@ renderPlotly({
     get_cagr(10)
   mod_cagr <- scales::percent(mod_cagr-1, accuracy = .1) 
 
-bind_rows(historic(), post_mod(), pre_mod())|>
+plt <- bind_rows(historic(), post_mod(), pre_mod())|>
   mutate(mod_cagr=mod_cagr)|>
   unite(facet_label, input$margin, mod_cagr, sep=": ")|>
   ggplot()+
-    geom_line(aes(year, employment, colour=series, lty=series))+
+    geom_line(aes(year, 
+                  employment, 
+                  colour=series, 
+                  lty=series,
+                  group=series,
+                  text=paste0(
+                    "Employment: ",
+                    scales::comma(employment, accuracy = 1),
+                    "\n Year: ",
+                    year)
+                  ))+
     facet_wrap(~facet_label)+
     theme_minimal()
+ggplotly(plt, tooltip = "text")
 })
 ```
 
@@ -355,18 +413,10 @@ Region
 renderPlotly({
   req(input$margin)
   req(input$item)
-
- regional_cagrs <- post_mod_region()|>
-    group_by(bc_region)|>
-    nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10))|>
-    select(bc_region, cagr)|>
-    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
-  
   bind_rows(region_historic, post_mod_region(), pre_mod_region())|>
-    full_join(regional_cagrs)|>
-    unite(bc_region, bc_region, cagr, sep=": ")|>
-    margin_plot("bc_region")
+    full_join(regional_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
+    mutate(both=paste(bc_region, cagr, sep=": "))|>
+    margin_plot("both", "bc_region")
 })
 ```
 
@@ -379,18 +429,10 @@ Industry
 renderPlotly({
   req(input$margin)
   req(input$item)
-
- industry_cagrs <- post_mod_industry()|>
-    group_by(lmo_ind_code)|>
-    nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10))|>
-    select(lmo_ind_code, cagr)|>
-    mutate(cagr=scales::percent(cagr-1, accuracy=.1))
-  
   bind_rows(industry_historic, post_mod_industry(), pre_mod_industry())|>
-    full_join(industry_cagrs)|>
+    full_join(industry_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
     unite(lmo_ind_code, lmo_ind_code, cagr, sep=": ")|>
-    margin_plot("lmo_ind_code")
+    margin_plot("lmo_ind_code", "lmo_detailed_industry")
 })
 ``` 
 
@@ -498,6 +540,105 @@ renderPlotly({
 occ_plot(8)
 })
 ```
+
+Region Scatter
+=======================================
+
+```{r}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+  plt <- post_mod_region()|>
+    group_by(bc_region)|>
+    summarize(employment=sum(employment))|>
+    mutate(share=employment/sum(employment))|>
+    full_join(regional_cagrs())|>
+    ggplot(aes(share, 
+            cagr, 
+            text=paste0("Region: ",
+                        bc_region,
+                        "\n Growth rate: ",
+                        scales::percent(cagr, accuracy=.1),
+                        "\n Share: ",
+                        scales::percent(share, accuracy=.1)  
+                        )))+
+    geom_point()+
+    scale_x_continuous(trans="log10", labels = scales::percent)+
+    scale_y_continuous(labels=scales::percent)+
+    theme_minimal()+ 
+    theme(text=element_text(size=20))+
+    labs(x="Share",
+         y="Growth Rate")
+  ggplotly(plt, tooltip = "text")
+})
+```
+
+Industry Scatter
+=============================================
+
+```{r}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+  plt <- post_mod_industry()|>
+    group_by(lmo_ind_code, lmo_detailed_industry)|>
+    summarize(employment=sum(employment))|>
+    ungroup()|>
+    mutate(share=employment/sum(employment))|>
+    full_join(industry_cagrs())|>
+    ggplot(aes(share,
+               cagr,
+               text=paste0(paste(lmo_ind_code, lmo_detailed_industry, sep=": "),
+                        "\n Growth rate: ",
+                        scales::percent(cagr, accuracy=.1),
+                        "\n Share: ",
+                        scales::percent(share, accuracy=.01)
+                        )))+
+    geom_point()+
+    scale_x_continuous(trans="log10", labels = scales::percent)+
+    scale_y_continuous(labels=scales::percent)+
+    theme_minimal()+
+    theme(text=element_text(size=20))+
+    labs(x="Share",
+         y="Growth Rate")
+  ggplotly(plt, tooltip = "text")
+})
+```
+
+Occupation Scatter
+=============================================
+
+```{r}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+  plt <- post_mod_occupation()|>
+    group_by(noc_5)|>
+    summarize(employment=sum(employment, na.rm=TRUE))|>
+    mutate(share=employment/sum(employment, na.rm=TRUE))|>
+    full_join(noc_descriptions)|>
+    full_join(occupation_cagrs())|>
+ ggplot(aes(share, 
+            cagr,
+            text=paste0(noc_5,
+                        ": ",
+                        class_title,
+                        "\n Growth rate: ",
+                        scales::percent(cagr, accuracy=.1),
+                        "\n Share: ",
+                        scales::percent(share, accuracy=.0001)  
+                        )))+
+    geom_point(alpha=.5)+
+    scale_x_continuous(trans="log10", labels=scales::percent)+
+    scale_y_continuous(labels=scales::percent)+
+    theme_minimal()+
+    theme(text=element_text(size=20))+
+    labs(x="Share",
+         y="Growth Rate")
+  ggplotly(plt, tooltip = "text")
+})
+```
+
 
 
 
