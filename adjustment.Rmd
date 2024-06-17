@@ -20,7 +20,7 @@ conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
 #functions--------------------------------------
-margin_plot <- function(tbbl, margin, text){
+margin_plot <- function(tbbl, margin){
   plt <- tbbl|>
   ggplot()+
     geom_line(aes(year, 
@@ -29,11 +29,18 @@ margin_plot <- function(tbbl, margin, text){
                   lty=series,
                   group=series,
                   text=paste0(
-                    get(text),
+                    description,
                     "\n Employment: ",
                     scales::comma(employment, accuracy = 1),
                     "\n Year: ",
-                    year)))+
+                    year,
+                    "\n Modified 10 year CAGR: ",
+                    mod_cagr,
+                    "\n Pre modification 10 year CAGR: ",
+                    pre_cagr,
+                    "\n 5 year historic CAGR: ",
+                    historic_cagr
+                    )))+
     facet_wrap(~ get(margin), scales = "free_y")+
     labs(x=NULL,
          y=NULL)+
@@ -58,8 +65,9 @@ occ_plot <- function(pg){
   plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|>
     filter(page==pg)|>
     left_join(noc_descriptions)|>
-    left_join(occupation_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
-    unite(noc_5, noc_5, cagr, sep=": ")|>
+    left_join(occupation_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
+    left_join(occupation_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
+    left_join(occupation_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
     ggplot()+
       geom_line(aes(year, 
                     employment, 
@@ -70,7 +78,13 @@ occ_plot <- function(pg){
                                 "\n Employment: ",
                                 scales::comma(employment, accuracy = 1),
                                 "\n Year: ",
-                                year)
+                                year,
+                                "\n Modified 10 year CAGR: ",
+                                mod_cagr,
+                                "\n Pre modification 10 year CAGR: ",
+                                pre_cagr,
+                                "\n 5 year historic CAGR: ",
+                                historic_cagr)
                     )
                 )+
       facet_wrap(~noc_5, scales = "free_y")+
@@ -96,7 +110,7 @@ industry_historic <- read_rds(here("out", "historic_lmo_ind_code.rds"))
 occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
   full_join(noc_descriptions)|>
   arrange(noc_5)|>
-  mutate(page=ntile(n=8))|>
+  mutate(page=ntile(n=12))|>
   group_by(page)|>
   mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))
 noc_pages <- occupation_historic|> 
@@ -108,6 +122,26 @@ regions <- unique(region_historic$bc_region)
 industries <- unique(industry_historic$lmo_ind_code)
 occupations <- unique(occupation_historic$noc_5)
 
+regional_historic_cagrs <- region_historic|>
+  group_by(bc_region)|>
+  nest()|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+         historic_cagr=historic_cagr-1)|>
+  select(-data)
+
+industry_historic_cagrs <- industry_historic|>
+  group_by(lmo_ind_code)|>
+  nest()|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+         historic_cagr=historic_cagr-1)|>
+  select(-data)
+
+occupation_historic_cagrs <- occupation_historic|>
+  group_by(noc_5)|>
+  nest()|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+         historic_cagr=historic_cagr-1)|>
+  select(-data)
 ```
 
 Inputs {.sidebar}
@@ -219,42 +253,6 @@ post_mod_occupation <- reactive({
     full_join(noc_pages)
 })
 
-historic <- reactive({
-  if(input$margin=="bc_region"){
-    region_historic|>filter(bc_region==input$item)#|>mutate(series="historic")
-  }else if(input$margin=="noc_5"){
-    occupation_historic|>filter(noc_5==input$item)#|>mutate(series="historic")
-  }else if(input$margin=="lmo_ind_code"){
-    industry_historic|>filter(lmo_ind_code==input$item)#|>mutate(series="historic")
-  }else{
-    stop("error: historic")
-  }
-})
-
-pre_mod <- reactive({
-  if(input$margin=="bc_region"){
-    pre_mod_region()|> filter(bc_region==input$item)
-  }else if(input$margin=="noc_5"){
-    pre_mod_occupation()|> filter(noc_5==input$item)
-  }else if(input$margin=="lmo_ind_code"){
-    pre_mod_industry()|> filter(lmo_ind_code==input$item)
-  }else{
-    stop("error: pre mod")
-  }
-})
-
-post_mod <- reactive({
-  if(input$margin=="bc_region"){
-    post_mod_region()|> filter(bc_region==input$item)
-  }else if(input$margin=="noc_5"){
-    post_mod_occupation()|> filter(noc_5==input$item)
-  }else if(input$margin=="lmo_ind_code"){
-    post_mod_industry()|> filter(lmo_ind_code==input$item)
-  }else{
-    stop("error: post mod")
-  }
-})
-
 observeEvent(input$save, {
   shares()|> #give the modified share tbbl same structure as pre_mod_share tbbl, and overwrite.
     select(-pre_mod_share, -multiplier)|>
@@ -274,30 +272,57 @@ observeEvent(input$save, {
 
 })
 
-regional_cagrs <- reactive({
+regional_mod_cagrs <- reactive({
   post_mod_region()|>
     group_by(bc_region)|>
     nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10),
-           cagr=cagr-1)|>
-    select(bc_region, cagr)
+    mutate(mod_cagr=map_dbl(data, get_cagr, 10),
+           mod_cagr=mod_cagr-1)|>
+    select(bc_region, mod_cagr)
 })
-industry_cagrs <- reactive({
+industry_mod_cagrs <- reactive({
   post_mod_industry()|>
     group_by(lmo_ind_code)|>
     nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10), 
-           cagr=cagr-1)|>
-    select(lmo_ind_code, cagr)
+    mutate(mod_cagr=map_dbl(data, get_cagr, 10), 
+           mod_cagr=mod_cagr-1)|>
+    select(lmo_ind_code, mod_cagr)
 })
 
-occupation_cagrs <- reactive({
+regional_pre_cagrs <- reactive({
+  pre_mod_region()|>
+    group_by(bc_region)|>
+    nest()|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, 10),
+           pre_cagr=pre_cagr-1)|>
+    select(bc_region, pre_cagr)
+})
+
+industry_pre_cagrs <- reactive({
+  pre_mod_industry()|>
+    group_by(lmo_ind_code)|>
+    nest()|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
+           pre_cagr=pre_cagr-1)|>
+    select(lmo_ind_code, pre_cagr)
+})
+
+occupation_mod_cagrs <- reactive({
   post_mod_occupation()|>
     group_by(noc_5)|>
     nest()|>
-    mutate(cagr=map_dbl(data, get_cagr, 10), 
-           cagr=cagr-1)|>
-    select(noc_5, cagr)      
+    mutate(mod_cagr=map_dbl(data, get_cagr, 10), 
+           mod_cagr=mod_cagr-1)|>
+    select(noc_5, mod_cagr)      
+})
+
+occupation_pre_cagrs <- reactive({
+  pre_mod_occupation()|>
+    group_by(noc_5)|>
+    nest()|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
+           pre_cagr=pre_cagr-1)|>
+    select(noc_5, pre_cagr)      
 })
 ```
 
@@ -325,84 +350,6 @@ Description
 *  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
 *  Note that these unadjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
-Manipulate a cell
-=====================================  
-
-Row {data-height=900}
--------------------------------------
-
-### 
-
-```{r}
-renderPlotly({
-  req(input$margin)
-  req(input$item)
-
-  mod_cagr <- post_mod()|>
-    get_cagr(10)
-  mod_cagr <- scales::percent(mod_cagr-1, accuracy = .1) 
-
-plt <- bind_rows(historic(), post_mod(), pre_mod())|>
-  mutate(mod_cagr=mod_cagr)|>
-  unite(facet_label, input$margin, mod_cagr, sep=": ")|>
-  ggplot()+
-    geom_line(aes(year, 
-                  employment, 
-                  colour=series, 
-                  lty=series,
-                  group=series,
-                  text=paste0(
-                    "Employment: ",
-                    scales::comma(employment, accuracy = 1),
-                    "\n Year: ",
-                    year)
-                  ))+
-    facet_wrap(~facet_label)+
-    theme_minimal()
-ggplotly(plt, tooltip = "text")
-})
-```
-
-Row {data-height=100}
--------------------------------------
-  
-
-### Historic 5 year CAGR
-
-```{r}
-renderUI({
-  req(input$margin)
-  req(input$item)
-  hist_cagr <- historic()|>
-    get_cagr(5)
-  scales::percent(hist_cagr-1, accuracy = .1)
-})
-```
-
-### Base forecast 10 year CAGR
-    
-```{r}
-renderUI({
-  req(input$margin)
-  req(input$item)
-  base_cagr <- pre_mod()|>
-    get_cagr(10)
-  scales::percent(base_cagr-1, accuracy = .1)
-}) 
-```
- 
-### Modified 10 year CAGR
-    
-```{r}
-renderUI({
-  req(input$margin)
-  req(input$item)
-  mod_cagr <- post_mod()|>
-    get_cagr(10)
-  scales::percent(mod_cagr-1, accuracy = .1)
-})
-```
- 
    
 Region timeplots
 ====================================     
@@ -414,9 +361,11 @@ renderPlotly({
   req(input$margin)
   req(input$item)
   bind_rows(region_historic, post_mod_region(), pre_mod_region())|>
-    full_join(regional_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
-    mutate(both=paste(bc_region, cagr, sep=": "))|>
-    margin_plot("both", "bc_region")
+    mutate(description=bc_region)|>
+    full_join(regional_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
+    full_join(regional_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
+    full_join(regional_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
+    margin_plot("bc_region")
 })
 ```
 
@@ -430,9 +379,11 @@ renderPlotly({
   req(input$margin)
   req(input$item)
   bind_rows(industry_historic, post_mod_industry(), pre_mod_industry())|>
-    full_join(industry_cagrs()|>mutate(cagr=scales::percent(cagr, accuracy=.1)))|>
-    unite(lmo_ind_code, lmo_ind_code, cagr, sep=": ")|>
-    margin_plot("lmo_ind_code", "lmo_detailed_industry")
+    rename(description=lmo_detailed_industry)|>
+    full_join(industry_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
+    full_join(industry_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
+    full_join(industry_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
+    margin_plot("lmo_ind_code")
 })
 ``` 
 
@@ -522,6 +473,48 @@ occ_plot(8)
 })
 ```
 
+### `r unique(occupation_historic$page_description[occupation_historic$page==9])`
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(9)
+})
+```
+
+### `r unique(occupation_historic$page_description[occupation_historic$page==10])`
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(10)
+})
+```
+
+### `r unique(occupation_historic$page_description[occupation_historic$page==11])`
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(11)
+})
+```
+
+### `r unique(occupation_historic$page_description[occupation_historic$page==12])`
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+occ_plot(12)
+})
+```
+
+
+
 Region growth vs. share
 =======================================
 
@@ -533,23 +526,23 @@ renderPlotly({
     group_by(bc_region)|>
     summarize(employment=sum(employment))|>
     mutate(share=employment/sum(employment))|>
-    full_join(regional_cagrs())|>
+    full_join(regional_mod_cagrs())|>
     ggplot(aes(share, 
-            cagr, 
+            mod_cagr, 
             text=paste0("Region: ",
                         bc_region,
                         "\n Growth rate: ",
-                        scales::percent(cagr, accuracy=.1),
+                        scales::percent(mod_cagr, accuracy=.1),
                         "\n Share: ",
                         scales::percent(share, accuracy=.1)  
                         )))+
-    geom_point()+
+    geom_point(alpha=.5)+
     scale_x_continuous(trans="log10", labels = scales::percent)+
     scale_y_continuous(labels=scales::percent)+
     theme_minimal()+ 
     theme(text=element_text(size=20))+
     labs(x="Share",
-         y="Growth Rate")
+         y="Forecast 10 year CAGR")
   ggplotly(plt, tooltip = "text")
 })
 ```
@@ -566,22 +559,22 @@ renderPlotly({
     summarize(employment=sum(employment))|>
     ungroup()|>
     mutate(share=employment/sum(employment))|>
-    full_join(industry_cagrs())|>
+    full_join(industry_mod_cagrs())|>
     ggplot(aes(share,
-               cagr,
+               mod_cagr,
                text=paste0(paste(lmo_ind_code, lmo_detailed_industry, sep=": "),
                         "\n Growth rate: ",
-                        scales::percent(cagr, accuracy=.1),
+                        scales::percent(mod_cagr, accuracy=.1),
                         "\n Share: ",
                         scales::percent(share, accuracy=.01)
                         )))+
-    geom_point()+
+    geom_point(alpha=.5)+
     scale_x_continuous(trans="log10", labels = scales::percent)+
     scale_y_continuous(labels=scales::percent)+
     theme_minimal()+
     theme(text=element_text(size=20))+
     labs(x="Share",
-         y="Growth Rate")
+         y="Forecast 10 year CAGR")
   ggplotly(plt, tooltip = "text")
 })
 ```
@@ -598,14 +591,14 @@ renderPlotly({
     summarize(employment=sum(employment, na.rm=TRUE))|>
     mutate(share=employment/sum(employment, na.rm=TRUE))|>
     full_join(noc_descriptions)|>
-    full_join(occupation_cagrs())|>
+    full_join(occupation_mod_cagrs())|>
  ggplot(aes(share, 
-            cagr,
+            mod_cagr,
             text=paste0(noc_5,
                         ": ",
                         class_title,
                         "\n Growth rate: ",
-                        scales::percent(cagr, accuracy=.1),
+                        scales::percent(mod_cagr, accuracy=.1),
                         "\n Share: ",
                         scales::percent(share, accuracy=.0001)  
                         )))+
@@ -615,7 +608,7 @@ renderPlotly({
     theme_minimal()+
     theme(text=element_text(size=20))+
     labs(x="Share",
-         y="Growth Rate")
+         y="Forecast 10 year CAGR")
   ggplotly(plt, tooltip = "text")
 })
 ```
