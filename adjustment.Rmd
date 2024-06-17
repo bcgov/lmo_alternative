@@ -113,15 +113,15 @@ occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
   mutate(page=ntile(n=12))|>
   group_by(page)|>
   mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))
-noc_pages <- occupation_historic|> 
+noc_pages <- occupation_historic|> #by NOC aggregates need to be split across multiple pages.
   select(noc_5, class_title, page)|>
   distinct()
-mod_shares <-  read_rds(here("out","modified_shares","shares.rds"))
-bc_fcast <- read_rds(here("out","bc_forecast.rds"))
+mod_shares <-  read_rds(here("out","modified_shares","shares.rds")) #forecast shares, overwritten on each save
+bc_fcast <- read_rds(here("out","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
 regions <- unique(region_historic$bc_region)
 industries <- unique(industry_historic$lmo_ind_code)
 occupations <- unique(occupation_historic$noc_5)
-
+#non-reactive growth rates
 regional_historic_cagrs <- region_historic|>
   group_by(bc_region)|>
   nest()|>
@@ -192,7 +192,7 @@ actionButton("save", "Save modified shares to disk")
  
 ```{r}
 #reactive elements
-shares <- reactive({
+shares <- reactive({#the shares after the current modification (slope and shift)
   mod_shares|>
       ungroup()|>
       mutate(multiplier=if_else(get(input$margin) == input$item, 
@@ -200,78 +200,55 @@ shares <- reactive({
                                 1))|>
     group_by(year)|>
     mutate(post_mod_share=pre_mod_share*multiplier,
-           post_mod_share=post_mod_share/sum(post_mod_share))
+           post_mod_share=post_mod_share/sum(post_mod_share)) #proportions must sum to 1
 })
-
+# the cell forecasts pre and post modification
 pre_mod_forecast <- reactive({
  full_join(shares(), bc_fcast)|>
     mutate(employment=pre_mod_share*employment,
            series="Pre modification")
 })
-
 post_mod_forecast <- reactive({
   full_join(shares(), bc_fcast)|>
     mutate(employment=post_mod_share*employment,
            series="Post modification")
 })
-
+# regional aggregates of the pre and post modification forecasts
 pre_mod_region <- reactive({
   pre_mod_forecast()|>
     group_by(year, bc_region, series)|>
     summarize(employment=sum(employment))
 })
-
 post_mod_region <- reactive({
   post_mod_forecast()|>
     group_by(year, bc_region, series)|>
     summarize(employment=sum(employment))
 })
-
+# industry aggregates of the pre and post modification forecasts
 pre_mod_industry <- reactive({
   pre_mod_forecast()|>
     group_by(year, lmo_ind_code, lmo_detailed_industry, series)|>
     summarize(employment=sum(employment))
 })
-
 post_mod_industry <- reactive({
   post_mod_forecast()|>
     group_by(year, lmo_ind_code, lmo_detailed_industry, series)|>
     summarize(employment=sum(employment))
 })
-
+# occupation aggregates of the pre and post modification forecasts
 pre_mod_occupation <- reactive({
   pre_mod_forecast()|>
     group_by(year, noc_5, series)|>
     summarize(employment=sum(employment))|>
     full_join(noc_pages)
 })
-
 post_mod_occupation <- reactive({
   post_mod_forecast()|>
     group_by(year, noc_5, series)|>
     summarize(employment=sum(employment))|>
     full_join(noc_pages)
 })
-
-observeEvent(input$save, {
-  shares()|> #give the modified share tbbl same structure as pre_mod_share tbbl, and overwrite.
-    select(-pre_mod_share, -multiplier)|>
-    rename(pre_mod_share=post_mod_share)|>
-    write_rds(here("out","modified_shares", "shares.rds"))
-  tibble("margin"=input$margin, 
-         "item"=input$item, 
-         "shift"=input$shift, 
-         "slope"=input$slope)|>
-    write.table(here("out","change_log", "changes.csv"),
-    append = TRUE,
-    quote = TRUE,
-    sep = ",",
-    row.names = FALSE,
-    col.names = !file.exists(here("out","change_log", "changes.csv"))
-  )
-
-})
-
+# the CAGRs of the modified aggregate forecasts
 regional_mod_cagrs <- reactive({
   post_mod_region()|>
     group_by(bc_region)|>
@@ -288,25 +265,6 @@ industry_mod_cagrs <- reactive({
            mod_cagr=mod_cagr-1)|>
     select(lmo_ind_code, mod_cagr)
 })
-
-regional_pre_cagrs <- reactive({
-  pre_mod_region()|>
-    group_by(bc_region)|>
-    nest()|>
-    mutate(pre_cagr=map_dbl(data, get_cagr, 10),
-           pre_cagr=pre_cagr-1)|>
-    select(bc_region, pre_cagr)
-})
-
-industry_pre_cagrs <- reactive({
-  pre_mod_industry()|>
-    group_by(lmo_ind_code)|>
-    nest()|>
-    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
-           pre_cagr=pre_cagr-1)|>
-    select(lmo_ind_code, pre_cagr)
-})
-
 occupation_mod_cagrs <- reactive({
   post_mod_occupation()|>
     group_by(noc_5)|>
@@ -315,7 +273,23 @@ occupation_mod_cagrs <- reactive({
            mod_cagr=mod_cagr-1)|>
     select(noc_5, mod_cagr)      
 })
-
+# the CAGRs of the pre modification aggregate forecasts
+regional_pre_cagrs <- reactive({
+  pre_mod_region()|>
+    group_by(bc_region)|>
+    nest()|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, 10),
+           pre_cagr=pre_cagr-1)|>
+    select(bc_region, pre_cagr)
+})
+industry_pre_cagrs <- reactive({
+  pre_mod_industry()|>
+    group_by(lmo_ind_code)|>
+    nest()|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
+           pre_cagr=pre_cagr-1)|>
+    select(lmo_ind_code, pre_cagr)
+})
 occupation_pre_cagrs <- reactive({
   pre_mod_occupation()|>
     group_by(noc_5)|>
@@ -323,6 +297,24 @@ occupation_pre_cagrs <- reactive({
     mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
            pre_cagr=pre_cagr-1)|>
     select(noc_5, pre_cagr)      
+})
+#writing the modified proportions to disk
+observeEvent(input$save, {
+  shares()|> #give the modified share tbbl same structure as pre_mod_share tbbl, and overwrite.
+    select(-pre_mod_share, -multiplier)|>
+    rename(pre_mod_share=post_mod_share)|>
+    write_rds(here("out","modified_shares", "shares.rds"))
+  tibble("margin"=input$margin, 
+         "item"=input$item, 
+         "shift"=input$shift, 
+         "slope"=input$slope)|>
+    write.table(here("out","change_log", "changes.csv"),
+    append = TRUE,
+    quote = TRUE,
+    sep = ",",
+    row.names = FALSE,
+    col.names = !file.exists(here("out","change_log", "changes.csv"))
+  )
 })
 ```
 

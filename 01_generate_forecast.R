@@ -143,7 +143,8 @@ pre_mod_shares <- left_join(base_share, regional_factor)|>
   group_by(year)|>
   mutate(final_share=adjusted_share/sum(adjusted_share, na.rm = TRUE))|> #make proportions sum to 1
   arrange(desc(employment))|>
-  select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, pre_mod_share=final_share)
+  select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, pre_mod_share=final_share)|>
+  filter(pre_mod_share>0)
 
 write_rds(pre_mod_shares, here("out","pre_mod_shares.rds"))
 
