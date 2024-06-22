@@ -9,10 +9,11 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 
 #constants---------------------
-regional_weight <- .25
+regional_weight <- .5
 industry_weight <- .25
 occupation_weight <- .1
-
+cagr_horizon <- 10
+base_years <- c(2018:2019, 2021:2023)
 #functions-----------------------
 get_cagr <- function(tbbl, horizon){
   max_year <- max(tbbl$year)
@@ -25,7 +26,7 @@ get_factor <- function(tbbl, horizon, cagr_weight){
   max_year <- max(tbbl$year)
   cagr <- get_cagr(tbbl, horizon)
   growth_factor <- cagr_weight*cagr+(1-cagr_weight)*bc_cagr
-  factor <- growth_factor^(1:11)
+  factor <- growth_factor^(0:10)
   year <- (max_year+1):(max_year+11)
   tibble(year=year, factor=factor)
 }
@@ -36,15 +37,6 @@ agg_and_save <- function(var1, var2=NULL){
     mutate(series="historic")|>
     write_rds(here("out",paste0("historic_",as.character(substitute(var1)),".rds")))
 }
-forecast_and_save <- function(var){
-  pre_mod_shares|>
-    group_by(year, {{  var  }})|>
-    summarise(pre_mod_share=sum(pre_mod_share))|>
-    full_join(bc_fcast)|>
-    mutate(employment=employment*pre_mod_share)|>
-    write_rds(here("out",paste0("base_fcast_",as.character(substitute(var)),".rds")))
-}
-
 #read in the data----------------------
 mapping <- read_csv(here("data", "mapping", "tidy_2024_naics_to_lmo.csv"))|>
   mutate(naics=paste0("0",naics))|>
@@ -64,29 +56,40 @@ lfs <- vroom(list.files(here("data"), pattern = "RTRA", full.names = TRUE))|>
 bc <- lfs|>
   filter(is.na(bc_region) & is.na(noc_5))|>
   group_by(year)|>
-  summarize(employment=sum(employment))
+  summarize(employment=sum(employment))|>
+  mutate(series="LFS")
 
 #growth rate for all of bc: shrink towards for sparse data (e.g. by occupation)----------------
 bc_cagr <- bc|>
-  get_cagr(5)
+  get_cagr(cagr_horizon)
 
 #CREATE BC FORECAST---------------------------------------
-budget <- read_csv(here("data","constraint.csv"))
+budget <- read_csv(here("data","constraint.csv"))|>
+  mutate(series="budget forecast")
 
 bind_rows(bc, budget)|>
   tsibble(index = year)|>
-  model(ETS(employment))|>
+  model(ETS=ETS(employment),
+        log_ETS=ETS(log(employment)),
+        tslm=TSLM(employment~year),
+        log_tslm=TSLM(log(employment)~year)
+        )|>
   forecast(h = 6)|>
   tibble()|>
-  select(year, .mean)|>
-  rename(employment=.mean)|>
-  bind_rows(budget)|>
+  select(.model, year, .mean)|>
+  rename(employment=.mean,
+         series=.model)|>
+  group_by(year)|>
+  summarize(employment=mean(employment))|>
+  mutate(series="our forecast")|>
+  bind_rows(bc, budget)|>
   arrange(year)|>
   write_rds(here("out", "bc_forecast.rds"))
 
 # BASELINE SHARES: based on recent data (2020=COVID)------------
+
 base_share <- lfs|>
-  filter(year %in% c(2018, 2019, 2021:2023),
+  filter(year %in% base_years,
          !is.na(bc_region),
          !is.na(noc_5))|>
   group_by(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
@@ -102,7 +105,7 @@ regional_factor <- lfs|>
   summarize(employment=sum(employment))|>
   group_by(bc_region)|>
   nest()|>
-  mutate(factors=map(data, get_factor, 5, regional_weight))|>
+  mutate(factors=map(data, get_factor, cagr_horizon, regional_weight))|>
   unnest(factors)|>
   select(-data)|>
   rename(regional_factor=factor)
@@ -114,7 +117,7 @@ industry_factor <- lfs|>
   group_by(lmo_ind_code, lmo_detailed_industry)|>
   select(-bc_region, -noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, 5, industry_weight))|>
+  mutate(factors=map(data, get_factor, cagr_horizon, industry_weight))|>
   unnest(factors)|>
   select(-data)|>
   rename(industry_factor=factor)
@@ -130,7 +133,7 @@ occupation_factor <- lfs|>
   tibble()|>
   group_by(noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, 5, occupation_weight))|>
+  mutate(factors=map(data, get_factor, cagr_horizon, occupation_weight))|>
   unnest(factors)|>
   select(-data)|>
   rename(occupation_factor=factor)
@@ -141,13 +144,12 @@ pre_mod_shares <- left_join(base_share, regional_factor)|>
   left_join(occupation_factor)|>
   mutate(adjusted_share=base_share*regional_factor*industry_factor*occupation_factor)|>
   group_by(year)|>
-  mutate(final_share=adjusted_share/sum(adjusted_share, na.rm = TRUE))|> #make proportions sum to 1
-  arrange(desc(employment))|>
-  select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, pre_mod_share=final_share)|>
+  mutate(pre_mod_share=adjusted_share/sum(adjusted_share, na.rm = TRUE))|> #make proportions sum to 1
+  select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, pre_mod_share)|>
   filter(pre_mod_share>0)
 
+write_rds(pre_mod_shares, here("out","modified_shares","shares.rds"))
 write_rds(pre_mod_shares, here("out","pre_mod_shares.rds"))
-
 #aggregate historic data by margin
 no_aggregates <- lfs|>
   filter(!is.na(bc_region),
