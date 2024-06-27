@@ -618,7 +618,3 @@ renderPlotly({
   ggplotly(plt, tooltip = "text")
 })
 ```
-
-
-
-

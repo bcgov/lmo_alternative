@@ -9,12 +9,12 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 
 #constants---------------------
-# regional_weight <- .5
-# industry_weight <- .25
-# occupation_weight <- .05
-regional_weight <- 0
-industry_weight <- 0
-occupation_weight <- 0
+regional_weight <- .5
+industry_weight <- .25
+occupation_weight <- .05
+# regional_weight <- 0
+# industry_weight <- 0
+# occupation_weight <- 0
 
 cagr_horizon <- 10
 base_years <- c(2018:2019, 2021:2023)
@@ -77,7 +77,7 @@ bind_rows(bc, budget)|>
         log_ETS=ETS(log(employment)),
         tslm=TSLM(employment~year),
         log_tslm=TSLM(log(employment)~year)
-        )|>
+  )|>
   forecast(h = 6)|>
   tibble()|>
   select(.model, year, .mean)|>
@@ -166,10 +166,3 @@ no_aggregates <- lfs|>
 agg_and_save(bc_region)
 agg_and_save(lmo_ind_code, lmo_detailed_industry)
 agg_and_save(noc_5)
-
-
-
-
-
-
-
