@@ -19,6 +19,7 @@ conflicts_prefer(vroom::cols)
 conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
+cagr_horizon <- 10
 #functions--------------------------------------
 margin_plot <- function(tbbl, margin){
   plt <- tbbl|>
@@ -125,21 +126,21 @@ occupations <- unique(occupation_historic$noc_5)
 regional_historic_cagrs <- region_historic|>
   group_by(bc_region)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
          historic_cagr=historic_cagr-1)|>
   select(-data)
 
 industry_historic_cagrs <- industry_historic|>
   group_by(lmo_ind_code)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
          historic_cagr=historic_cagr-1)|>
   select(-data)
 
 occupation_historic_cagrs <- occupation_historic|>
   group_by(noc_5)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, 5),
+  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
          historic_cagr=historic_cagr-1)|>
   select(-data)
 ```

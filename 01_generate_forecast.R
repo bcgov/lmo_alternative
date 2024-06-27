@@ -9,9 +9,13 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 
 #constants---------------------
-regional_weight <- .5
-industry_weight <- .25
-occupation_weight <- .1
+# regional_weight <- .5
+# industry_weight <- .25
+# occupation_weight <- .05
+regional_weight <- 0
+industry_weight <- 0
+occupation_weight <- 0
+
 cagr_horizon <- 10
 base_years <- c(2018:2019, 2021:2023)
 #functions-----------------------
@@ -19,7 +23,7 @@ get_cagr <- function(tbbl, horizon){
   max_year <- max(tbbl$year)
   start <- tbbl$employment[tbbl$year==max_year-horizon]
   end <-  tbbl$employment[tbbl$year==max_year]
-  if_else(start==0, 1, (end/start)^(1/horizon)) #if start=0 the data is probably shitty: assume zero growth
+  if_else(start<=500, 1, (end/start)^(1/horizon)) #if start<500 the data is probably shitty: assume zero growth
 }
 
 get_factor <- function(tbbl, horizon, cagr_weight){
@@ -59,7 +63,7 @@ bc <- lfs|>
   summarize(employment=sum(employment))|>
   mutate(series="LFS")
 
-#growth rate for all of bc: shrink towards for sparse data (e.g. by occupation)----------------
+#growth rate for all of bc: shrink towards for dodgy disaggregates----------------
 bc_cagr <- bc|>
   get_cagr(cagr_horizon)
 
