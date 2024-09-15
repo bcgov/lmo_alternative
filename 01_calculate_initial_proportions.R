@@ -12,10 +12,7 @@ conflicts_prefer(dplyr::lag)
 regional_weight <- .5
 industry_weight <- .25
 occupation_weight <- .05
- # regional_weight <- 0
- # industry_weight <- 0
- # occupation_weight <- 0
-
+top_growth_adjustment <- -.00155 #adjust to match stokes' expansion demand
 cagr_horizon <- 10
 base_years <- c(2018:2019, 2021:2023)
 #functions-----------------------
@@ -46,7 +43,7 @@ mapping <- read_csv(here("data", "mapping", "tidy_2024_naics_to_lmo.csv"))|>
   mutate(naics=paste0("0",naics))|>
   select(-naics3,-naics2)
 
-lfs <- vroom(list.files(here("data"), pattern = "RTRA", full.names = TRUE))|>
+lfs <- vroom(list.files(here("data"), pattern = "stat", full.names = TRUE))|>
   clean_names()|>
   rename(year=syear,
          employment=count)|>
@@ -55,6 +52,19 @@ lfs <- vroom(list.files(here("data"), pattern = "RTRA", full.names = TRUE))|>
   inner_join(mapping, by = c("naics_5"="naics"))|>
   group_by(year, bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
   summarize(employment=sum(employment))
+
+#aggregate historic data by margin
+no_aggregates <- lfs|>
+  filter(!is.na(bc_region),
+         !is.na(noc_5)
+  )|>
+  tsibble(index=year, key=c(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry))|>
+  tsibble::fill_gaps(employment=0, .full=TRUE)|>
+  tibble()
+
+agg_and_save(bc_region)
+agg_and_save(lmo_ind_code, lmo_detailed_industry)
+agg_and_save(noc_5)
 
 #Historic data for all of BC
 bc <- lfs|>
@@ -71,24 +81,18 @@ bc_cagr <- bc|>
 budget <- read_csv(here("data","constraint.csv"))|>
   mutate(series="budget forecast")
 
-bind_rows(bc, budget)|>
-  tsibble(index = year)|>
-  model(ETS=ETS(employment),
-        log_ETS=ETS(log(employment)),
-        tslm=TSLM(employment~year),
-        log_tslm=TSLM(log(employment)~year)
-  )|>
-  forecast(h = 6)|>
-  tibble()|>
-  select(.model, year, .mean)|>
-  rename(employment=.mean,
-         series=.model)|>
-  group_by(year)|>
-  summarize(employment=mean(employment))|>
-  mutate(series="our forecast")|>
+budget_growth <- (tail(budget$employment, n=1)/head(budget$employment, n=1))^.25
+adjusted_budget_growth <- budget_growth+top_growth_adjustment
+
+our_forecast <- tibble(year=(max(budget$year)+1):(max(budget$year)+6))|>
+  mutate(employment=tail(budget$employment, n=1)*adjusted_budget_growth^(year-max(budget$year)),
+         series="our forecast")
+
+bc_forecast <- our_forecast|>
   bind_rows(bc, budget)|>
-  arrange(year)|>
-  write_rds(here("out", "bc_forecast.rds"))
+  arrange(year)
+
+write_rds(bc_forecast, here("out", "bc_forecast.rds"))
 
 # BASELINE SHARES: based on recent data (2020=COVID)------------
 
@@ -154,15 +158,4 @@ pre_mod_shares <- left_join(base_share, regional_factor)|>
 
 write_rds(pre_mod_shares, here("out","modified_shares","shares.rds"))
 write_rds(pre_mod_shares, here("out","pre_mod_shares.rds"))
-#aggregate historic data by margin
-no_aggregates <- lfs|>
-  filter(!is.na(bc_region),
-         !is.na(noc_5)
-  )|>
-  tsibble(index=year, key=c(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry))|>
-  tsibble::fill_gaps(employment=0, .full=TRUE)|>
-  tibble()
 
-agg_and_save(bc_region)
-agg_and_save(lmo_ind_code, lmo_detailed_industry)
-agg_and_save(noc_5)
