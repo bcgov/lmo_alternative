@@ -6,7 +6,7 @@ library(janitor)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 #constants--------------------------------
-replacement_adjustment <- 13.69 #ad hoc adjustment to match Stoke's (found via trial and error)
+replacement_adjustment <- 13.625 #ad hoc adjustment to match Stoke's (found via trial and error)
 #read in data-----------------
 mapping <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
   select(naics, lmo_detailed_industry)
@@ -34,12 +34,16 @@ region_replace_prop <- vroom(here("data",list.files(here("data"), pattern = "age
 
 noc_replace_prop <- vroom(here("data", list.files(here("data"), pattern = "agenoc")))|>
   clean_names()|>
+  mutate(noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5))|>
+  group_by(noc_5, age_group)|>
+  summarize(count=sum(count, na.rm = TRUE))|>
   na.omit()|>
   group_by(noc_5)|>
   mutate(noc_prop=count/sum(count))|>
   filter(age_group=="old")|>
   select(noc_5, noc_prop)|>
   transmute(noc_replace_prop=noc_prop/replacement_adjustment) #same transform
+
 
 industry_replace_prop <- vroom(here("data",list.files(here("data"), pattern = "agenaics")))|>
   clean_names()|>
@@ -59,7 +63,8 @@ replace_prop <- crossing(region_replace_prop, industry_replace_prop, noc_replace
   select(bc_region, lmo_detailed_industry, noc_5, replace_prop)
 
 #' expansion demand is the change in employment, scaled up to account for "normal" unemployment
-#' i.e. expansion demand is the change in labour force, not the change in employment
+#' i.e. expansion demand is the change in labour force, not the change in employment... labour force is
+#' larger than employment by the ratio (employed+normal unemployed)/employed
 
 region_expand_ratio <- vroom(here("data",
                     "employed_unemployed",
@@ -79,6 +84,9 @@ occupation_expand_ratio <- vroom(here("data",
                     list.files(here("data","employed_unemployed"),
                                pattern = "eunoc")))|>
   clean_names()|>
+  mutate(noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5))|>
+  group_by(noc_5, lf_stat)|>
+  summarize(count=sum(count, na.rm = TRUE))|>
   na.omit()|>
   filter(lf_stat %in% c("Employed","Unemployed"))|>
   group_by(noc_5)|>
@@ -124,9 +132,4 @@ richs_forecast <- left_join(emp_and_diff, expand_ratio)|>
          expansion_demand,
          replacement_demand)
 
-sum(richs_forecast$expansion_demand, na.rm = TRUE)
-sum(richs_forecast$replacement_demand, na.rm = TRUE)
-
-
-
-
+write_rds(richs_forecast, here("out","richs_forecast.rds"))

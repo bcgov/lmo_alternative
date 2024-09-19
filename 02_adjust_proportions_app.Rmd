@@ -63,7 +63,7 @@ get_cagr <- function(tbbl, horizon){
   if_else(start==0, 1, (end/start)^(1/horizon)) #if start=0 the data is probably shitty: assume zero growth
 }
 occ_plot <- function(pg){
-  plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|>
+  plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|> 
     filter(page==pg)|>
     left_join(noc_descriptions)|>
     left_join(occupation_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
@@ -101,27 +101,33 @@ occ_plot <- function(pg){
 }
 
 # read in the data----------------------------
+mod_shares <-  read_rds(here("out","modified_shares","shares.rds")) #forecast shares, overwritten on each save
+bc_fcast <- read_rds(here("out","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
+regions <- unique(mod_shares$bc_region)
+industries <- sort(unique(mod_shares$lmo_ind_code))
+occupations <- sort(unique(mod_shares$noc_5))
+
 noc_descriptions <- vroom(here("data", "mapping","noc21descriptions.csv"), 
-                          col_types = cols(noc_5 = col_character(), class_title = col_character()),
+                          col_types = cols(noc_5 = col_character(), lmo_noc=col_character(), class_title = col_character()),
                           delim=",")|>
+  select(noc_5=lmo_noc, class_title)|>
+  distinct()|>
   mutate(noc_5=str_pad(noc_5, width=5, pad="0"))
 
 region_historic <- read_rds(here("out","historic_bc_region.rds"))
 industry_historic <- read_rds(here("out", "historic_lmo_ind_code.rds"))
 occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
-  full_join(noc_descriptions)|>
+  left_join(noc_descriptions)|>
   arrange(noc_5)|>
-  mutate(page=ntile(n=12))|>
+  mutate(page=ntile(n=8))|>
   group_by(page)|>
-  mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))
+  mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))|>
+  filter(noc_5 %in% occupations)
+
 noc_pages <- occupation_historic|> #by NOC aggregates need to be split across multiple pages.
   select(noc_5, class_title, page)|>
   distinct()
-mod_shares <-  read_rds(here("out","modified_shares","shares.rds")) #forecast shares, overwritten on each save
-bc_fcast <- read_rds(here("out","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
-regions <- unique(region_historic$bc_region)
-industries <- unique(industry_historic$lmo_ind_code)
-occupations <- unique(occupation_historic$noc_5)
+
 #non-reactive growth rates
 regional_historic_cagrs <- region_historic|>
   group_by(bc_region)|>
@@ -327,17 +333,17 @@ Description
 * For the BC LMO we are constrained by the Finance BC employment forecast (at least for the first 5 years)
 * Given this constraint, in effect we are forecasting proportions of BC employment.
 * There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
-* At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 64 industries, and 517 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
-* Note that this cube is extremely sparse: there are not many combinations of region, industry and occupation that have positive proportions.
+* At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 64 industries, and 512 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
+* Note that this cube is extremely sparse: there are not many combinations of region, industry and occupation that have positive counts.
 * We are typically interested in looking at two dimensions at a time: e.g. industry employment over time, aggregating over the remaining two dimensions. 
 * Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
 
 ### Approach taken:
 
-*  Using LFS data from the years 2018,2019,2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
-*  We then aggregate the data by each of the above margins, and calculate the 5 year CAGR (2018--2023) for each item of each margin e.g. the recent historic growth rate for the Kootenays.
+*  Using LFS data from the years 2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+*  We then aggregate the data by each of the above margins, and calculate the 10 year CAGR for each item of each margin e.g. the 10 year growth rate for the Kootenays.
 *  We then apply these marginal growth rates to adjust the baseline proportions.
-*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2018,2019,2021,2022,2023.  Suppose that region's CAGR is 2%, the industry's CAGR is 3%, and the occupation's CAGR is -4%,
+*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2021,2022,2023.  Suppose that region's CAGR is 2%, the industry's CAGR is 3%, and the occupation's CAGR is -4%,
 *  For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
 *  Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
 *  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
@@ -479,45 +485,7 @@ occ_plot(8)
 })
 ```
 
-### `r unique(occupation_historic$page_description[occupation_historic$page==9])`
 
-```{r, fig.retina=2}
-renderPlotly({
-  req(input$margin)
-  req(input$item)
-occ_plot(9)
-})
-```
-
-### `r unique(occupation_historic$page_description[occupation_historic$page==10])`
-
-```{r, fig.retina=2}
-renderPlotly({
-  req(input$margin)
-  req(input$item)
-occ_plot(10)
-})
-```
-
-### `r unique(occupation_historic$page_description[occupation_historic$page==11])`
-
-```{r, fig.retina=2}
-renderPlotly({
-  req(input$margin)
-  req(input$item)
-occ_plot(11)
-})
-```
-
-### `r unique(occupation_historic$page_description[occupation_historic$page==12])`
-
-```{r, fig.retina=2}
-renderPlotly({
-  req(input$margin)
-  req(input$item)
-occ_plot(12)
-})
-```
 
 
 
