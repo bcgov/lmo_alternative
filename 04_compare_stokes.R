@@ -29,12 +29,10 @@ rich_vs_stokes <- function(tbbl, var1, var2, cor){
     scale_colour_viridis_c()+
     scale_x_continuous(trans="log10", labels=scales::comma)+
     scale_y_continuous(trans="log10", labels=scales::comma)+
-    labs(title=paste("The correlation between the industry/region forecasts is",round(cor,3)))
+    labs(title=paste("correlation: ",round(cor,3)))
 
   plotly::ggplotly(plt, tooltip="text")
 }
-
-
 
 richs_forecast <- read_rds(here("out","richs_forecast.rds"))
 
@@ -111,8 +109,9 @@ industry_replace_cor <- cor(region_industry$richs_replacement_demand, region_ind
 
 
 rich_vs_stokes(region_industry, richs_employment, stokes_employment, industry_employment_cor)
-rich_vs_stokes(region_industry, richs_expansion_demand, stokes_expansion_demand, industry_expansion_cor)
 rich_vs_stokes(region_industry, richs_replacement_demand, stokes_replacement_demand, industry_replace_cor)
+rich_vs_stokes(region_industry, richs_expansion_demand, stokes_expansion_demand, industry_expansion_cor)
+
 
 
 

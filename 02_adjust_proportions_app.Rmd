@@ -341,9 +341,18 @@ Description
 ### Approach taken:
 
 *  Using LFS data from the years 2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
-*  We then aggregate the data by each of the above margins, and calculate the 10 year CAGR for each item of each margin e.g. the 10 year growth rate for the Kootenays.
+*  We then aggregate the data by each of the above margins, smooth the data via a 3 year moving average, and then calculate the median annual growth rate.
+*  Note that if smoothed employment is ever zero and then subsequently increases, the annual growth rate is $\infty$.
+*  We use robust measures such as the median and inter-quartile range to deal with this possibility.
+*  We also shrink the individual growth rates towards the overall (BC) median growth rate via a weighted average.
+*  The weights we utilize depend the relative spread $rs$ of the annual growth: 
+
+$$rs=IQR(annual~growth)/median(annual~growth)$$
+
+*  The weight we put on B.C.'s median annual growth rate is $\frac{rs}{rs+rs_{BC}}$
+*  i.e. the greater the relative spread in the annual growth rates the less we trust the data, so we put a greater weight on B.C.'s median annual growth rate.
 *  We then apply these marginal growth rates to adjust the baseline proportions.
-*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2021,2022,2023.  Suppose that region's CAGR is 2%, the industry's CAGR is 3%, and the occupation's CAGR is -4%,
+*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2021,2022,2023.  Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
 *  For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
 *  Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
 *  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.

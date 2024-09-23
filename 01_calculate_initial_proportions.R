@@ -5,6 +5,7 @@ library(conflicted)
 library(vroom)
 library(janitor)
 library(fpp3)
+
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
@@ -16,15 +17,21 @@ get_cagr <- function(tbbl, horizon){
   max_year <- max(tbbl$year)
   start <- tbbl$employment[tbbl$year==max_year-horizon]
   end <-  tbbl$employment[tbbl$year==max_year]
-  if_else(start<=500, 1, (end/start)^(1/horizon)) #if start<500 the data is probably shitty: assume zero growth
+  (end/start)^(1/horizon)
 }
 
 get_factor <- function(tbbl, horizon){
-  browser()
+  tbbl <- tbbl|>
+    mutate(employment=zoo::rollmean(employment, k=3, align = "right", na.pad = TRUE),
+           annual_growth=employment/lag(employment))
   max_year <- max(tbbl$year)
-  cagr <- get_cagr(tbbl, horizon)
-  cagr_weight <- (mean(tbbl$employment, na.rm=TRUE)/largest_group)^.5 # more employment => larger weight on specific cagr
-  growth_factor <- cagr_weight*cagr+(1-cagr_weight)*bc_cagr #growth is a weighted average of the specific and bc cagrs
+  iqr <- IQR(tbbl$annual_growth, na.rm=TRUE)
+  median_growth <- median(tbbl$annual_growth, na.rm=TRUE)
+  iqr_over_median <- iqr/median_growth
+  bc_weight <- (iqr_over_median/(bc_iqr_over_median+iqr_over_median))^2 #reduce bc weight
+  bc_weight <- if_else(bc_weight==0, 1, bc_weight)#only way bc_weight=0 is if data is shitty
+  print(bc_weight)
+  growth_factor <-(1-bc_weight)*median_growth+(bc_weight)*bc_median_growth
   factor <- growth_factor^(0:10)
   year <- (max_year+1):(max_year+11)
   tibble(year=year, factor=factor)
@@ -89,8 +96,13 @@ bc <- lfs|>
   mutate(series="LFS")
 
 #growth rate for all of bc: shrink towards for dodgy disaggregates----------------
-bc_cagr <- bc|>
-  get_cagr(cagr_horizon)
+bc_annual_growth <- bc|>
+  mutate(employment=zoo::rollmean(employment, k=3, align = "right", na.pad = TRUE),
+         annual_growth=employment/lag(employment))
+
+bc_median_growth <- median(bc_annual_growth$annual_growth, na.rm=TRUE)
+bc_iqr <- IQR(bc_annual_growth$annual_growth, na.rm=TRUE)
+bc_iqr_over_median <- bc_iqr/bc_median_growth
 
 #CREATE BC FORECAST---------------------------------------
 budget <- read_csv(here("data","constraint.csv"))|>
@@ -162,9 +174,9 @@ occupation_factor <- lfs|>
   rename(occupation_factor=factor)
 
 # PRE MODIFICATION SHARES --------------------------
-pre_mod_shares <- left_join(base_share, regional_factor)|>
-  left_join(industry_factor)|>
-  left_join(occupation_factor)|>
+pre_mod_shares <- full_join(base_share, regional_factor)|>
+  full_join(industry_factor)|>
+  full_join(occupation_factor)|>
   mutate(adjusted_share=base_share*regional_factor*industry_factor*occupation_factor)|>
   group_by(year)|>
   mutate(pre_mod_share=adjusted_share/sum(adjusted_share, na.rm = TRUE))|> #make proportions sum to 1
