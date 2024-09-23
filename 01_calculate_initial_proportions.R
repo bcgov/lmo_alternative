@@ -28,8 +28,8 @@ get_factor <- function(tbbl, horizon){
   iqr <- IQR(tbbl$annual_growth, na.rm=TRUE)
   median_growth <- median(tbbl$annual_growth, na.rm=TRUE)
   iqr_over_median <- iqr/median_growth
-  bc_weight <- (iqr_over_median/(bc_iqr_over_median+iqr_over_median))^2 #reduce bc weight
-  bc_weight <- if_else(bc_weight==0, 1, bc_weight)#only way bc_weight=0 is if data is shitty
+  bc_weight <- (iqr_over_median/(bc_iqr_over_median+iqr_over_median))#greater the variability of data, greater weight on bc growth
+  bc_weight <- if_else(bc_weight==0, 1, bc_weight)#if bc_weight==0 data is shitty
   print(bc_weight)
   growth_factor <-(1-bc_weight)*median_growth+(bc_weight)*bc_median_growth
   factor <- growth_factor^(0:10)
