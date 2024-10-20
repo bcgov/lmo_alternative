@@ -1,0 +1,315 @@
+---
+title: "Comparing Stokes to Rich"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+resource_files:
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(here)
+library(plotly)
+library(conflicted)
+library(janitor)
+library(readxl)
+conflicts_prefer(dplyr::filter)
+```
+
+```{r}
+#functions------------------------------
+rich_vs_stokes <- function(tbbl, var1, var2, cor){
+  plt <- ggplot(tbbl,  aes({{  var1  }},
+                           {{  var2  }},
+                           colour=year,
+                           text=paste0(
+                             "Region: ",
+                             bc_region,
+                             "\n Industry: ",
+                             lmo_detailed_industry,
+                             "\n Year: ",
+                             year,
+                             "\n Rich: ",
+                             scales::comma({{  var1  }}, accuracy = 1),
+                             "\n Stokes: ",
+                             scales::comma({{  var2  }}, accuracy = 1)
+                           )
+  )
+  )+
+    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
+    geom_point(size=.5)+
+    scale_colour_viridis_c()+
+    scale_x_continuous(trans="log10", labels=scales::comma)+
+    scale_y_continuous(trans="log10", labels=scales::comma)+
+    labs(title=paste("correlation: ",round(cor,3)))
+
+  plotly::ggplotly(plt, tooltip="text")
+}
+rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
+  plt <- ggplot(tbbl,  aes({{  var1  }},
+                           {{  var2  }},
+                           colour=year,
+                           text=paste0(
+                             "NOC: ",
+                             description,
+                             "\n Year: ",
+                             year,
+                             "\n Rich: ",
+                             scales::comma({{  var1  }}, accuracy = 1),
+                             "\n Stokes: ",
+                             scales::comma({{  var2  }}, accuracy = 1)
+                           )
+  )
+  )+
+    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
+    geom_point(size=.5)+
+    scale_colour_viridis_c()+
+    scale_x_continuous(trans="log10", labels=scales::comma)+
+    scale_y_continuous(trans="log10", labels=scales::comma)+
+    labs(title=paste("correlation: ",round(cor,3)))
+
+  plotly::ggplotly(plt, tooltip="text")
+}
+#read in the data----------------------
+
+correct_industries <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
+  select(naics, lmo_detailed_industry)|>
+  select(lmo_detailed_industry)|>
+  distinct()|>
+  ungroup()
+
+#my forecasts-----------------------------------
+richs_forecast <- read_rds(here("out","richs_forecast.rds"))
+
+richs_region_industry <- richs_forecast|>
+  group_by(bc_region, lmo_ind_code, lmo_detailed_industry, year)|>
+  summarise(richs_employment=sum(employment))
+
+richs_occupation <- richs_forecast|>
+  group_by(noc_5, year)|>
+  summarise(richs_employment=sum(employment))
+
+correct_regions <- richs_region_industry|>
+  ungroup()|>
+  select(bc_region)|>
+  distinct()
+
+#lfs data-----------------------
+occ_lfs <-  read_excel(here("data", "Labour force status for 5 digit NOC 2014-2023.xlsx"), sheet = "Employed", skip=3)|>
+    pivot_longer(cols = starts_with("2"), names_to = "year")|>
+    clean_names()|>
+  rename(description=class_title)|>
+   mutate(noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5),
+          description=if_else(noc_5=="00018","Senior managers - public and private sector", description))|>
+  group_by(noc_5, description, year)|>
+  summarize(value=sum(value, na.rm = TRUE))
+
+ind_lfs_file <- here("data","Employment for 64 LMO Industries 2000-2023.xlsx")
+
+ind_lfs <- excel_sheets(ind_lfs_file) %>%
+  set_names() %>%
+  map(~ read_excel(ind_lfs_file, sheet = .x, skip = 3))|>
+  enframe()|>
+  unnest(value)|>
+  rename(bc_region=name)|>
+  pivot_longer(cols=starts_with("2"), names_to = "year")|>
+  clean_names()|>
+  fuzzyjoin::stringdist_join(correct_industries)|>
+  rename(lmo_detailed_industry=lmo_detailed_industry.y)|>
+  fuzzyjoin::stringdist_join(correct_regions)|>
+  rename(bc_region=bc_region.y)
+
+#stokes data-------------------
+stokes_employment_industry <- read_excel(here("data","stokes_data", "employment_industry.xlsx"), skip = 3)|>
+  pivot_longer(cols=starts_with("2"), names_to = "year", values_to = "stokes_employment")|>
+  clean_names()|>
+  ungroup()|>
+  rename(lmo_detailed_industry=industry)|>
+  fuzzyjoin::stringdist_join(correct_industries)|>
+  rename(lmo_detailed_industry=lmo_detailed_industry.y)|>
+  select(bc_region=geographic_area, lmo_detailed_industry, year, stokes_employment)|>
+  filter(bc_region!="British Columbia")|>
+  mutate(year=as.numeric(year),
+         bc_region=if_else(bc_region=="Mainland South West","Lower Mainland-Southwest", bc_region),
+         bc_region=if_else(bc_region=="Vancouver Island Coast","Vancouver Island and Coast", bc_region)
+  )|>
+  fuzzyjoin::stringdist_full_join(correct_regions)|>
+  rename(bc_region=bc_region.y)|>
+  select(-bc_region.x)
+
+stokes_employment_occupation <- read_excel(here("data","stokes_data", "employment_occupation.xlsx"), skip = 3)|>
+  pivot_longer(cols=starts_with("2"), names_to = "year", values_to = "stokes_employment")|>
+  clean_names()|>
+  filter(geographic_area!="British Columbia")|>
+  group_by(noc, description, year)|>
+  summarize(stokes_employment=sum(stokes_employment))|>
+  mutate(year=as.numeric(year),
+         noc=str_sub(noc, 2))
+
+#merging forecasts------------------------------
+
+region_industry <- full_join(richs_region_industry, stokes_employment_industry)|>
+  mutate(richs_employment=if_else(is.na(richs_employment), 0, richs_employment))
+
+occupation <- full_join(richs_occupation, stokes_employment_occupation, by=c("noc_5"="noc", "year"="year"))|>
+  mutate(richs_employment=if_else(is.na(richs_employment), 0, richs_employment))
+
+#correlations between forecasts----------------------------
+
+industry_employment_cor <- cor(region_industry$richs_employment, 
+                               region_industry$stokes_employment, 
+                               method = "pearson")
+
+occupation_employment_cor <- cor(occupation$richs_employment, 
+                               occupation$stokes_employment, 
+                               method = "pearson",
+                               use="pairwise.complete.obs")
+
+#for dropdowns
+occupations <- unique(occupation$description)
+industries <- unique(region_industry$lmo_detailed_industry)
+regions <- unique(region_industry$bc_region)
+```
+
+By Industry:Region
+=====================================  
+
+Inputs {.sidebar}
+-------------------------------------
+
+* If you hover over the plot on the left, a tooltip displays the industry and region.
+* The further you are from the 45 degree line, the greater the difference between Stokes and Rich.
+* Not much daylight between the forecasts.
+
+
+```{r}
+
+selectInput(
+  "industry",
+  "choose an industry:",
+  industries,
+  selected = "Provincial and territorial public administration",
+)
+
+selectInput(
+  "region",
+  "choose a region:",
+  regions,
+  selected = "Lower Mainland-Southwest",
+)
+
+industry_fcasts <- reactive({
+  region_industry|>
+    filter(lmo_detailed_industry==input$industry,
+           bc_region==input$region)|>
+    select(lmo_detailed_industry, bc_region, year, contains("employment"))|>
+    pivot_longer(cols = contains("employment"))
+})
+
+industry_lfs <- reactive({
+  ind_lfs|>
+    filter(lmo_detailed_industry==input$industry,
+             bc_region==input$region)|>
+      select(lmo_detailed_industry, bc_region, year, value)|>
+    mutate(name="LFS",
+           year=as.numeric(year))
+})
+```
+
+    
+Column {data-width=500}
+-------------------------------------
+    
+### Forecast comparison of all Industry:Region combinations
+    
+```{r}
+rich_vs_stokes(region_industry, richs_employment, stokes_employment, industry_employment_cor)
+```
+   
+Column {data-width=500}
+-------------------------------------
+   
+### Forecast comparison for the selected Industry:Region
+
+```{r}
+renderPlotly({
+  bind_rows(industry_lfs(),industry_fcasts())|>
+  ggplot(aes(year, value, colour=name))+
+  geom_line()+
+  labs(x=NULL, 
+       y="Employment",
+       colour=NULL,
+       title=paste(input$industry, input$region, sep=": "))+
+  scale_y_continuous(labels = scales::comma)
+})
+```   
+ 
+
+By Occupation
+=====================================
+
+Inputs {.sidebar}
+-------------------------------------
+
+* If you hover over the plot on the left, a tooltip displays the occupation.
+* The further you are from the 45 degree line, the greater the difference between Stokes and Rich.
+* The forecasts are substantially more different by occupation, and I would argue that my forecasts better reflect the LFS data.
+
+
+```{r}
+selectInput(
+  "occupation",
+  "choose an occupation:",
+  occupations,
+  selected = "Retail sales supervisors",
+)
+
+occupation_fcasts <- reactive({
+  occupation|>
+    filter(description==input$occupation)|>
+    select(noc_5, year, contains("employment"))|>
+    pivot_longer(cols = contains("employment"))
+})
+
+occupation_lfs <- reactive({
+  occ_lfs|>
+    filter(description==input$occupation)|>
+    mutate(name="LFS",
+           year=as.numeric(year))
+})
+```
+
+
+Column {data-width=500}
+-------------------------------------
+    
+### Forecast comparison of all occupations
+    
+```{r}
+rich_vs_stokes2(occupation, richs_employment, stokes_employment, occupation_employment_cor)
+```
+   
+Column {data-width=500}
+-------------------------------------
+   
+### Forecast comparison for the selected occupation
+
+```{r, fig.retina=2}
+renderPlotly({
+bind_rows(occupation_lfs(), occupation_fcasts())|>
+  ggplot(aes(year, value, colour=name))+
+  geom_line()+
+  labs(x=NULL, 
+       y="Employment",
+       colour=NULL,
+       title=input$occupation)+
+  scale_y_continuous(labels = scales::comma)
+})
+```   
+ 
+
+
+

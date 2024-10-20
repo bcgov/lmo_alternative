@@ -5,37 +5,36 @@ library(conflicted)
 library(vroom)
 library(janitor)
 library(fpp3)
-
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
 top_growth_adjustment <- -.0015 #adjust to match stokes' expansion demand
 cagr_horizon <- 10
+pval_power <- .02 #we raise p-values to this power to create weight on bc's growth rate.
 base_years <- c(2021:2023)
 #functions-----------------------
-get_cagr <- function(tbbl, horizon){
-  max_year <- max(tbbl$year)
-  start <- tbbl$employment[tbbl$year==max_year-horizon]
-  end <-  tbbl$employment[tbbl$year==max_year]
-  (end/start)^(1/horizon)
-}
 
-get_factor <- function(tbbl, horizon){
+get_factor <- function(tbbl){
   tbbl <- tbbl|>
-    mutate(employment=zoo::rollmean(employment, k=3, align = "right", na.pad = TRUE),
-           annual_growth=employment/lag(employment))
+    mutate(series="base")
   max_year <- max(tbbl$year)
-  iqr <- IQR(tbbl$annual_growth, na.rm=TRUE)
-  median_growth <- median(tbbl$annual_growth, na.rm=TRUE)
-  iqr_over_median <- iqr/median_growth
-  bc_weight <- (iqr_over_median/(bc_iqr_over_median+iqr_over_median))#greater the variability of data, greater weight on bc growth
-  bc_weight <- if_else(bc_weight==0, 1, bc_weight)#if bc_weight==0 data is shitty
-  print(bc_weight)
-  growth_factor <-(1-bc_weight)*median_growth+(bc_weight)*bc_median_growth
+  bound <- bind_rows(tbbl, bc)#adds in top level employment to this series
+  mod <- lm(log(employment+1)~year*series, data=bound)|>
+    broom::tidy()
+  this_growth <- mod|> #the estimated growth factor for this series
+    filter(term=="year")|>
+    pull(estimate)|>
+    exp()
+  pval <- mod|> #what is probability of observing a growth rate at least this different than BC's if null hypothesis is true?
+    filter(term=="year:seriesLFS")|>
+    pull(p.value)
+  bc_weight <- pval^pval_power #the smaller the p.value, the smaller the weight on bc (more confident that growth factors differ)
+  growth_factor <-(1-bc_weight)*this_growth+(bc_weight)*bc_growth_factor
   factor <- growth_factor^(0:10)
   year <- (max_year+1):(max_year+11)
   tibble(year=year, factor=factor)
 }
+
 agg_and_save <- function(tbbl, var1, var2=NULL){
   tbbl|>
     group_by(year, {{  var1  }}, {{  var2  }})|>
@@ -56,7 +55,7 @@ lmo_nocs <-read_csv(here("data", "mapping", "noc21descriptions.csv"))|>
 
 lmo_nocs <- bind_rows(lmo_nocs, tibble(lmo_noc=NA_character_)) #add in the NA so we keep the aggregate
 
-lfs <- vroom(list.files(here("data"), pattern = "stat", full.names = TRUE))|>
+lfs <- vroom(list.files(here("data"), pattern = "_stat", full.names = TRUE))|>
   clean_names()|>
   rename(year=syear,
          employment=count)|>
@@ -80,14 +79,6 @@ agg_and_save(no_aggregates, bc_region)
 agg_and_save(no_aggregates, lmo_ind_code, lmo_detailed_industry)
 agg_and_save(no_aggregates, noc_5)
 
-largest_group <- no_aggregates|>
-  filter(year==max(year))|>
-  group_by(bc_region)|>
-  summarize(employment=sum(employment))|>
-  filter(employment==max(employment))|>
-  pull(employment)
-
-
 #Historic data for all of BC
 bc <- lfs|>
   filter(is.na(bc_region) & is.na(noc_5))|>
@@ -95,16 +86,13 @@ bc <- lfs|>
   summarize(employment=sum(employment))|>
   mutate(series="LFS")
 
-#growth rate for all of bc: shrink towards for dodgy disaggregates----------------
-bc_annual_growth <- bc|>
-  mutate(employment=zoo::rollmean(employment, k=3, align = "right", na.pad = TRUE),
-         annual_growth=employment/lag(employment))
+bc_growth_factor <- lm(log(employment+1)~year, data=bc)|>
+  broom::tidy()|> #the estimated growth factor for this series
+  filter(term=="year")|>
+  pull(estimate)|>
+  exp()
 
-bc_median_growth <- median(bc_annual_growth$annual_growth, na.rm=TRUE)
-bc_iqr <- IQR(bc_annual_growth$annual_growth, na.rm=TRUE)
-bc_iqr_over_median <- bc_iqr/bc_median_growth
-
-#CREATE BC FORECAST---------------------------------------
+ #CREATE BC FORECAST---------------------------------------
 budget <- read_csv(here("data","constraint.csv"))|>
   mutate(series="budget forecast")
 
@@ -124,7 +112,7 @@ write_rds(bc_forecast, here("out", "bc_forecast.rds"))
 #' BASELINE SHARES: based on recent data (2020=COVID)------------
 
 base_share <- lfs|>
-  filter(year %in% base_years, #' note that only 509 NOCs have employment recorded for recent data
+  filter(year %in% base_years, #' note that 5 NOCs have either missing or zero employment for the base years
          !is.na(bc_region),
          !is.na(noc_5))|>
   group_by(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
@@ -140,7 +128,7 @@ regional_factor <- lfs|>
   summarize(employment=sum(employment))|>
   group_by(bc_region)|>
   nest()|>
-  mutate(factors=map(data, get_factor, cagr_horizon))|>
+  mutate(factors=map(data, get_factor))|>
   unnest(factors)|>
   select(-data)|>
   rename(regional_factor=factor)
@@ -152,7 +140,7 @@ industry_factor <- lfs|>
   group_by(lmo_ind_code, lmo_detailed_industry)|>
   select(-bc_region, -noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, cagr_horizon))|>
+  mutate(factors=map(data, get_factor))|>
   unnest(factors)|>
   select(-data)|>
   rename(industry_factor=factor)
@@ -168,7 +156,7 @@ occupation_factor <- lfs|>
   tibble()|>
   group_by(noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, cagr_horizon))|>
+  mutate(factors=map(data, get_factor))|>
   unnest(factors)|>
   select(-data)|>
   rename(occupation_factor=factor)

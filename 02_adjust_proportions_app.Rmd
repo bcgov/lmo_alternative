@@ -1,10 +1,17 @@
 ---
 title: "Forecasting proportions of total employment"
-output: 
+output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
 runtime: shiny
+resource_files:
+- out/modified_shares/shares.rds
+- out/bc_forecast.rds
+- out/historic_bc_region.rds
+- out/historic_lmo_ind_code.rds
+- out/historic_noc_5.rds
+- data/mapping/noc21descriptions.csv
 ---
 
 ```{r setup, include=FALSE}
@@ -330,33 +337,43 @@ Description
 
 ### Intro
 
-* For the BC LMO we are constrained by the Finance BC employment forecast (at least for the first 5 years)
+* For the BC LMO we are constrained by the Finance forecast.
 * Given this constraint, in effect we are forecasting proportions of BC employment.
 * There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
 * At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 64 industries, and 512 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
 * Note that this cube is extremely sparse: there are not many combinations of region, industry and occupation that have positive counts.
-* We are typically interested in looking at two dimensions at a time: e.g. industry employment over time, aggregating over the remaining two dimensions. 
 * Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
-
-### Approach taken:
-
 *  Using LFS data from the years 2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
-*  We then aggregate the data by each of the above margins, smooth the data via a 3 year moving average, and then calculate the median annual growth rate.
-*  Note that if smoothed employment is ever zero and then subsequently increases, the annual growth rate is $\infty$.
-*  We use robust measures such as the median and inter-quartile range to deal with this possibility.
-*  We also shrink the individual growth rates towards the overall (BC) median growth rate via a weighted average.
-*  The weights we utilize depend the relative spread $rs$ of the annual growth: 
+*  We then aggregate the LFS data from 2000 to 2023, creating 583 series (7 regions, 64 industries and 512 occupations) to which we apply the linear model: 
 
-$$rs=IQR(annual~growth)/median(annual~growth)$$
+$$ log(Employment+1) \sim time\times series+\epsilon$$
 
-*  The weight we put on B.C.'s median annual growth rate is $\frac{rs}{rs+rs_{BC}}$
-*  i.e. the greater the relative spread in the annual growth rates the less we trust the data, so we put a greater weight on B.C.'s median annual growth rate.
-*  We then apply these marginal growth rates to adjust the baseline proportions.
+*  Note that "series" is a categorical variable, with levels "this series" and "BC as a whole".
+*  Give the interaction between time and series, we are estimating a separate relationship between Employment and time for the two series (both slopes and intercepts can differ)
+*  The interaction term in the regression gives an indication of the difference in growth rates. 
+*  The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
+*  If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole. 
+*  If p.value > .05 there is little evidence that the series' growth rate differs from BC as a whole.
+*  We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.02$, and the weight on "this series" growth factor is $1-p.value^.02$. The relationship is shown $\rightarrow$
+*  Note that this is a pretty aggresive shrinkage towards BC's overall growth factor. 
+*  We then apply these weighted growth factors to adjust the baseline proportions.
 *  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2021,2022,2023.  Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
 *  For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
 *  Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
 *  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
 *  Note that these unadjusted proportions will not necessarily sum to 1: we adjust so they do so.
+
+### Relationship between p values and weight on BC's growth rate
+
+```{r, fig.retina=2}
+options(scipen = 999)
+tibble(p.value=.5^(0:50))|>
+  mutate(bc_weight=p.value^.02)|>
+  ggplot(aes(bc_weight, p.value))+
+  geom_line()+
+  scale_y_continuous(trans="log10", breaks =.1^(seq(0,20,2)))+
+  scale_x_continuous(trans="log10", breaks = seq(0,1,.1))
+```
 
 BC timeplot
 ====================================

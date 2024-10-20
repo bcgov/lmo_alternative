@@ -6,7 +6,7 @@ library(janitor)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 #constants--------------------------------
-replacement_adjustment <- 13.625 #ad hoc adjustment to match Stoke's (found via trial and error)
+replacement_adjustment <- 14.25 #increase this to make replacement demand go down.
 #read in data-----------------
 mapping <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
   select(naics, lmo_detailed_industry)
