@@ -10,8 +10,8 @@ replacement_adjustment <- 14.25 #increase this to make replacement demand go dow
 #read in data-----------------
 mapping <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
   select(naics, lmo_detailed_industry)
-mod_shares <- read_rds(here("out","modified_shares", "shares.rds")) #the shares after adjustment
-bc_fcast <- read_rds(here("out","bc_forecast.rds")) #the top level forecast
+mod_shares <- read_rds(here("out","modified", "shares.rds")) #the shares after adjustment
+bc_fcast <- read_rds(here("out","modified", "bc_forecast.rds")) #the top level forecast after adjustment
 
 # start by calculating employment and difference in employment----------------
 emp_and_diff <- left_join(mod_shares, bc_fcast, by = join_by(year))|>
@@ -63,8 +63,7 @@ replace_prop <- crossing(region_replace_prop, industry_replace_prop, noc_replace
   select(bc_region, lmo_detailed_industry, noc_5, replace_prop)
 
 #' expansion demand is the change in employment, scaled up to account for "normal" unemployment
-#' i.e. expansion demand is the change in labour force, not the change in employment... labour force is
-#' larger than employment by the ratio (employed+normal unemployed)/employed
+#' i.e. expansion demand is the change in employment multiplied by the ratio (employed+normal unemployed)/employed
 
 region_expand_ratio <- vroom(here("data",
                     "employed_unemployed",
@@ -78,6 +77,7 @@ region_expand_ratio <- vroom(here("data",
          region_ratio=total/count)|>
   filter(lf_stat=="Employed")|>
   select(bc_region, region_ratio)
+
 #occupation factors-------------------------
 occupation_expand_ratio <- vroom(here("data",
                     "employed_unemployed",

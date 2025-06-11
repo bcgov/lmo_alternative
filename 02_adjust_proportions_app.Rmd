@@ -6,7 +6,7 @@ output:
     vertical_layout: fill
 runtime: shiny
 resource_files:
-- out/modified_shares/shares.rds
+- out/modified/shares.rds
 - out/bc_forecast.rds
 - out/historic_bc_region.rds
 - out/historic_lmo_ind_code.rds
@@ -108,8 +108,8 @@ occ_plot <- function(pg){
 }
 
 # read in the data----------------------------
-mod_shares <-  read_rds(here("out","modified_shares","shares.rds")) #forecast shares, overwritten on each save
-bc_fcast <- read_rds(here("out","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
+mod_shares <-  read_rds(here("out","modified","shares.rds")) #forecast shares, overwritten on each save
+bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
 regions <- unique(mod_shares$bc_region)
 industries <- sort(unique(mod_shares$lmo_ind_code))
 occupations <- sort(unique(mod_shares$noc_5))
@@ -158,11 +158,15 @@ occupation_historic_cagrs <- occupation_historic|>
   select(-data)
 ```
 
-Inputs {.sidebar}
-=====================================
-
+# Inputs {.sidebar}
 
 ```{r}
+
+sliderInput("bc_slope", "Change BC slope",
+  min = .99, max = 1.01,
+  value = 1, step = .0001
+)
+
 # shiny inputs defined here
 selectInput(
   "margin",
@@ -203,9 +207,17 @@ sliderInput("slope", "Change slope",
 )
 actionButton("save", "Save modified shares to disk")
 ```
- 
+
 ```{r}
 #reactive elements
+
+bc_reactive <- reactive({
+  bc_fcast|>
+    mutate(employment=if_else(series=="our forecast", 
+                              employment*input$bc_slope^(year-2029), 
+                              employment))
+})
+
 shares <- reactive({#the shares after the current modification (slope and shift)
   mod_shares|>
       ungroup()|>
@@ -218,12 +230,12 @@ shares <- reactive({#the shares after the current modification (slope and shift)
 })
 # the cell forecasts pre and post modification
 pre_mod_forecast <- reactive({
- inner_join(shares(), bc_fcast)|>
+ inner_join(shares(), bc_reactive())|>
     mutate(employment=pre_mod_share*employment,
            series="Pre modification")
 })
 post_mod_forecast <- reactive({
-  inner_join(shares(), bc_fcast)|>
+  inner_join(shares(), bc_reactive())|>
     mutate(employment=post_mod_share*employment,
            series="Post modification")
 })
@@ -317,8 +329,8 @@ observeEvent(input$save, {
   shares()|> #give the modified share tbbl same structure as pre_mod_share tbbl, and overwrite.
     select(-pre_mod_share, -multiplier)|>
     rename(pre_mod_share=post_mod_share)|>
-    write_rds(here("out","modified_shares", "shares.rds"))
-  tibble("margin"=input$margin, 
+    write_rds(here("out","modified", "shares.rds"))
+  tibble("margin"=input$margin, #append this change to the change log.
          "item"=input$item, 
          "shift"=input$shift, 
          "slope"=input$slope)|>
@@ -329,68 +341,75 @@ observeEvent(input$save, {
     row.names = FALSE,
     col.names = !file.exists(here("out","change_log", "changes.csv"))
   )
+  #overwrite the top level forecast
+  bc_reactive()|>
+    write_rds(here("out","modified", "bc_forecast.rds"))
 })
 ```
 
-Description
-=====================================
+# Description
 
 ### Intro
 
-* For the BC LMO we are constrained by the Finance forecast.
-* Given this constraint, in effect we are forecasting proportions of BC employment.
-* There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
-* At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 64 industries, and 512 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
-* Note that this cube is extremely sparse: there are not many combinations of region, industry and occupation that have positive counts.
-* Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
-*  Using LFS data from the years 2021,2022,2023 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
-*  We then aggregate the LFS data from 2000 to 2023, creating 583 series (7 regions, 64 industries and 512 occupations) to which we apply the linear model: 
+-   For the BC LMO we are constrained by the Finance forecast.
+
+-   Given this constraint, in effect we are forecasting proportions of BC employment.
+
+-   There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
+
+-   At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 63 industries, and 512 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
+
+-   Note that these 11 cubes (one for each year) are extremely sparse: there are not many combinations of region, industry and occupation that have positive counts.
+
+-   Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
+
+-   Using LFS data from the years 2022:2024 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+
+-   We then aggregate the LFS data from 2000 to 2024, creating 582 series (7 regions, 63 industries and 512 occupations) to each of which we apply the linear model:
 
 $$ log(Employment+1) \sim time\times series+\epsilon$$
 
-*  Note that "series" is a categorical variable, with levels "this series" and "BC as a whole".
-*  Give the interaction between time and series, we are estimating a separate relationship between Employment and time for the two series (both slopes and intercepts can differ)
-*  The interaction term in the regression gives an indication of the difference in growth rates. 
-*  The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
-*  If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole. 
-*  If p.value > .05 there is little evidence that the series' growth rate differs from BC as a whole.
-*  We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.02$, and the weight on "this series" growth factor is $1-p.value^.02$. The relationship is shown $\rightarrow$
-*  Note that this is a pretty aggresive shrinkage towards BC's overall growth factor. 
-*  We then apply these weighted growth factors to adjust the baseline proportions.
-*  For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2021,2022,2023.  Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
-*  For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
-*  Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
-*  This is in contrast to the baseline levels, where the sparsity of the data indicates strong dependency between region, industry and occupation.
-*  Note that these unadjusted proportions will not necessarily sum to 1: we adjust so they do so.
+-   Note that "series" is a categorical variable, with levels "this series" and "BC as a whole".
+-   Give the interaction between time and series, we are estimating a separate relationship between Employment and time for the two series (both slopes and intercepts can differ)
+-   The interaction term in the regression gives an indication of the difference in growth rates.
+-   The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
+-   If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole.
+-   We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.02$, and the weight on "this series" growth factor is $1-p.value^.02$.
+-   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. e.g. if p.value=.00001 (we are really quite confident that this series is growing at a different rate than BC as a whole), the weight on BC's growth factor is still .8.
+-   We then apply these weighted growth factors to adjust the baseline proportions.
+-   For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2022:2024. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
+-   For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
+-   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
+-   This is in contrast to the baseline *levels*, where the sparsity of the data indicates strong dependency between region, industry and occupation.
+-   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
-### Relationship between p values and weight on BC's growth rate
-
-```{r, fig.retina=2}
-options(scipen = 999)
-tibble(p.value=.5^(0:50))|>
-  mutate(bc_weight=p.value^.02)|>
-  ggplot(aes(bc_weight, p.value))+
-  geom_line()+
-  scale_y_continuous(trans="log10", breaks =.1^(seq(0,20,2)))+
-  scale_x_continuous(trans="log10", breaks = seq(0,1,.1))
-```
-
-BC timeplot
-====================================
+# BC timeplot
 
 ```{r}
-ggplot(bc_fcast, aes(year, employment, colour=series))+
+plotly::renderPlotly({
+  plt <- ggplot(bc_reactive(), aes(year, 
+                            employment, 
+                            colour=series,
+                            group=series,
+                            text=paste0(
+                              "Series: ",
+                              series,
+                              "\n Employment: ",
+                              scales::comma(employment, accuracy = 1),
+                              "\n Year: ",
+                              year,
+                              "\n CAGR: ",
+                              scales::percent(cagr, accuracy = .1)
+                            )))+
   geom_line()+
   theme_minimal()+
   scale_y_continuous(labels = scales::comma)+
   labs(x=NULL, y=NULL, colour=NULL)
+ggplotly(plt, tooltip = "text")
+})
 ```
 
-
-
-   
-Region timeplots
-====================================     
+# Region timeplots
 
 ### Regional Employment
 
@@ -407,11 +426,10 @@ renderPlotly({
 })
 ```
 
-Industry timeplots
-=====================================  
+# Industry timeplots
 
 ### Industry Employment
- 
+
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
@@ -423,34 +441,32 @@ renderPlotly({
     full_join(industry_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
     margin_plot("lmo_ind_code")
 })
-``` 
+```
 
-Occupation timeplots
-=====================================
- 
- Row {.tabset}
--------------------------------------
-   
+# Occupation timeplots
+
+## Row {.tabset}
+
 ### `r unique(occupation_historic$page_description[occupation_historic$page==1])`
-    
+
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
   req(input$item)
 occ_plot(1)
 })
-``` 
+```
 
 ### `r unique(occupation_historic$page_description[occupation_historic$page==2])`
- 
+
 ```{r, fig.retina=2}
 renderPlotly({
   req(input$margin)
   req(input$item)
 occ_plot(2)
 })
-``` 
- 
+```
+
 ### `r unique(occupation_historic$page_description[occupation_historic$page==3])`
 
 ```{r, fig.retina=2}
@@ -459,7 +475,7 @@ renderPlotly({
   req(input$item)
 occ_plot(3)
 })
-```  
+```
 
 ### `r unique(occupation_historic$page_description[occupation_historic$page==4])`
 
@@ -511,12 +527,7 @@ occ_plot(8)
 })
 ```
 
-
-
-
-
-Region growth vs. share
-=======================================
+# Region growth vs. share
 
 ```{r}
 renderPlotly({
@@ -547,8 +558,7 @@ renderPlotly({
 })
 ```
 
-Industry growth vs. share
-=============================================
+# Industry growth vs. share
 
 ```{r}
 renderPlotly({
@@ -579,8 +589,7 @@ renderPlotly({
 })
 ```
 
-Occupation growth vs. share
-=============================================
+# Occupation growth vs. share
 
 ```{r}
 renderPlotly({
@@ -612,3 +621,16 @@ renderPlotly({
   ggplotly(plt, tooltip = "text")
 })
 ```
+
+# An example
+
+##
+
+-  Suppose that we want to increase the proportion of employment in region 2.
+-  Every cell on level 2 of the cube would increase by the same proportion.
+-  Every cell not on level 2 would diminish by a different (but uniform) proportion to compensate.
+
+##
+
+<img src="Screenshot from 2025-06-09 08-46-31.png" width="100%" />
+
