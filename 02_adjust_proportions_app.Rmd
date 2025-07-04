@@ -28,27 +28,37 @@ conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
 cagr_horizon <- 10
 #functions--------------------------------------
-margin_plot <- function(tbbl, margin){
-  plt <- tbbl|>
-  ggplot()+
-    geom_line(aes(year, 
-                  employment, 
-                  colour=series, 
-                  lty=series,
-                  group=series,
-                  text=paste0(
-                    description,
-                    "\n Employment: ",
-                    scales::comma(employment, accuracy = 1),
-                    "\n Year: ",
-                    year,
-                    "\n Modified 10 year CAGR: ",
-                    mod_cagr,
-                    "\n Pre modification 10 year CAGR: ",
-                    pre_cagr,
-                    "\n 10 year historic CAGR: ",
-                    historic_cagr
-                    )))+
+margin_plot <- function(tbbl, tbbl2, margin){
+  plt <- ggplot()+
+    geom_point(data=tbbl2, 
+               mapping=aes(year, 
+                           employment,
+                            text=paste0(
+                            "Census",
+                            "\n Employment: ",
+                            scales::comma(employment, accuracy = 1),
+                            "\n Year: ",
+                            year)),
+               alpha=.5)+
+    geom_line(data=tbbl, 
+              mapping=aes(year, 
+                          employment, 
+                          colour=series, 
+                          lty=series,
+                          group=series,
+                          text=paste0(
+                            description,
+                            "\n Employment: ",
+                            scales::comma(employment, accuracy = 1),
+                            "\n Year: ",
+                            year,
+                            "\n Modified 10 year CAGR: ",
+                            mod_cagr,
+                            "\n Pre modification 10 year CAGR: ",
+                            pre_cagr,
+                            "\n 10 year historic CAGR: ",
+                            historic_cagr
+                            )))+
     facet_wrap(~ get(margin), scales = "free_y")+
     labs(x=NULL,
          y=NULL)+
@@ -67,7 +77,7 @@ get_cagr <- function(tbbl, horizon){
   max_year <- max(tbbl$year)
   start <- tbbl$employment[tbbl$year==max_year-horizon]
   end <-  tbbl$employment[tbbl$year==max_year]
-  if_else(start==0, 1, (end/start)^(1/horizon)) #if start=0 the data is probably shitty: assume zero growth
+  if_else(start==0, NA_real_, (end/start)^(1/horizon)) 
 }
 occ_plot <- function(pg){
   plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|> 
@@ -77,6 +87,15 @@ occ_plot <- function(pg){
     left_join(occupation_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
     left_join(occupation_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
     ggplot()+
+    geom_point(data=occupation_census|>filter(page==pg),
+               mapping=aes(year, 
+                   employment, 
+                   text=paste0("Census",
+                               "\n Employment: ",
+                               scales::comma(employment, accuracy = 1),
+                               "\n Year: ",
+                               year)),
+               alpha=.5)+
       geom_line(aes(year, 
                     employment, 
                     colour=series, 
@@ -109,7 +128,7 @@ occ_plot <- function(pg){
 
 # read in the data----------------------------
 mod_shares <-  read_rds(here("out","modified","shares.rds")) #forecast shares, overwritten on each save
-bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus ETS forecast for last 6 years.
+bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus 6 years.
 regions <- unique(mod_shares$bc_region)
 industries <- sort(unique(mod_shares$lmo_ind_code))
 occupations <- sort(unique(mod_shares$noc_5))
@@ -134,6 +153,14 @@ occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
 noc_pages <- occupation_historic|> #by NOC aggregates need to be split across multiple pages.
   select(noc_5, class_title, page)|>
   distinct()
+
+region_census <- read_rds(here("out","census_region.rds"))
+industry_census <- read_rds(here("out","census_industry.rds"))
+occupation_census <- read_rds(here("out","census_occupation.rds"))|>
+  left_join(noc_descriptions)|>
+  arrange(noc_5)|>
+  filter(noc_5 %in% occupations)|>
+  inner_join(noc_pages)
 
 #non-reactive growth rates
 regional_historic_cagrs <- region_historic|>
@@ -212,10 +239,20 @@ actionButton("save", "Save modified shares to disk")
 #reactive elements
 
 bc_reactive <- reactive({
-  bc_fcast|>
+  last_year_of_budget <- bc_fcast|>
+    filter(series=="budget forecast")|>
+    summarize(max(year))|>
+    pull()
+  modified <- bc_fcast|>
     mutate(employment=if_else(series=="our forecast", 
-                              employment*input$bc_slope^(year-2029), 
+                              employment*input$bc_slope^(year-last_year_of_budget), 
                               employment))
+  lfs_and_finance <- modified|>
+    filter(series %in% c("LFS", "budget forecast"))
+  our_forecast <- modified|>
+    filter(series=="our forecast")|>
+    mutate(cagr=(employment[year==max(year)]/employment[year==min(year)])^(1/(max(year)-min(year)))-1)
+  bind_rows(lfs_and_finance, our_forecast)
 })
 
 shares <- reactive({#the shares after the current modification (slope and shift)
@@ -374,13 +411,13 @@ $$ log(Employment+1) \sim time\times series+\epsilon$$
 -   The interaction term in the regression gives an indication of the difference in growth rates.
 -   The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
 -   If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole.
--   We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.02$, and the weight on "this series" growth factor is $1-p.value^.02$.
--   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. e.g. if p.value=.00001 (we are really quite confident that this series is growing at a different rate than BC as a whole), the weight on BC's growth factor is still .8.
+-   We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.1$, and the weight on "this series" growth factor is $1-p.value^.1$.
+-   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. e.g. if p.value=.00001 (we are really quite confident that this series is growing at a different rate than BC as a whole), the weight on BC's growth factor is still .68.
 -   We then apply these weighted growth factors to adjust the baseline proportions.
 -   For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2022:2024. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
--   For the $t$th year of the forecast, the unadjusted proportion is $.01\times1.02^{t}\times1.03^{t}\times.96^{t}$.
+-   For the forecast year $t$ years after 2022, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
 -   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
--   This is in contrast to the baseline *levels*, where the sparsity of the data indicates strong dependency between region, industry and occupation.
+-   This is in contrast to the baseline *levels*, where the sparsity alone indicates strong dependency between region, industry and occupation.
 -   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
 # BC timeplot
@@ -399,7 +436,7 @@ plotly::renderPlotly({
                               "\n Year: ",
                               year,
                               "\n CAGR: ",
-                              scales::percent(cagr, accuracy = .1)
+                              scales::percent(cagr, accuracy = .01)
                             )))+
   geom_line()+
   theme_minimal()+
@@ -422,7 +459,7 @@ renderPlotly({
     full_join(regional_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
     full_join(regional_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
     full_join(regional_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
-    margin_plot("bc_region")
+    margin_plot(region_census, "bc_region")
 })
 ```
 
@@ -439,7 +476,7 @@ renderPlotly({
     full_join(industry_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
     full_join(industry_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
     full_join(industry_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
-    margin_plot("lmo_ind_code")
+    margin_plot(industry_census, "lmo_ind_code")
 })
 ```
 
@@ -627,8 +664,10 @@ renderPlotly({
 ##
 
 -  Suppose that we want to increase the proportion of employment in region 2.
--  Every cell on level 2 of the cube would increase by the same proportion.
--  Every cell not on level 2 would diminish by a different (but uniform) proportion to compensate.
+-  Every cell on level 2 of the cube would increase by the same proportion, maintaining the relative noc-naics composition within that region.
+-  Every cell not on level 2 would diminish to compensate, again maintaining the relative noc-naics composition within those regions.
+-  The same holds true for manipulating either an industry or occupation (vertical slices): every cell in that slice of the cube would increase by the same proportion, and every cell not in the slice would diminish to compensate, again maintaining the relative composition of the remaining two dimensions.
+
 
 ##
 

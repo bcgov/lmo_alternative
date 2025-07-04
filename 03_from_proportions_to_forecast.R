@@ -3,13 +3,14 @@ library(tidyverse)
 library(here)
 library(vroom)
 library(janitor)
+library(readxl)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 #constants--------------------------------
 replacement_adjustment <- 14.25 #increase this to make replacement demand go down.
 #read in data-----------------
-mapping <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
-  select(naics, lmo_detailed_industry)
+mapping <- read_excel(here("data","mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
+  select(naics=naics_5, lmo_detailed_industry)
 mod_shares <- read_rds(here("out","modified", "shares.rds")) #the shares after adjustment
 bc_fcast <- read_rds(here("out","modified", "bc_forecast.rds")) #the top level forecast after adjustment
 
@@ -22,7 +23,7 @@ emp_and_diff <- left_join(mod_shares, bc_fcast, by = join_by(year))|>
 
 #'calculate the proportions used to calculate replacement demand------------------------------
 #'replacement demand assumed to depend on the proportion of workers that are old (age>50)
-region_replace_prop <- vroom(here("data",list.files(here("data"), pattern = "agereg")))|>
+region_replace_prop <- vroom(here("data","age",list.files(here("data", "age"), pattern = "agereg")))|>
   clean_names()|>
   mutate(bc_region=if_else(is.na(bc_region), "British Columbia", bc_region))|>
   na.omit()|>
@@ -32,7 +33,7 @@ region_replace_prop <- vroom(here("data",list.files(here("data"), pattern = "age
   select(bc_region, region_prop)|>
   transmute(region_replace_prop=region_prop/replacement_adjustment) #ad hoc transform to match stokes for BC as a whole
 
-noc_replace_prop <- vroom(here("data", list.files(here("data"), pattern = "agenoc")))|>
+noc_replace_prop <- read_csv(here("data","age", list.files(here("data","age"), pattern = "agenoc")))|>
   clean_names()|>
   mutate(noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5))|>
   group_by(noc_5, age_group)|>
@@ -45,10 +46,10 @@ noc_replace_prop <- vroom(here("data", list.files(here("data"), pattern = "ageno
   transmute(noc_replace_prop=noc_prop/replacement_adjustment) #same transform
 
 
-industry_replace_prop <- vroom(here("data",list.files(here("data"), pattern = "agenaics")))|>
+industry_replace_prop <- read_csv(here("data","age",list.files(here("data","age"), pattern = "agenaics")))|>
   clean_names()|>
   na.omit()|>
-  mutate(naics_5=as.numeric(naics_5))|>
+ # mutate(naics_5=as.numeric(naics_5))|>
   left_join(mapping, by=c("naics_5"="naics"))|>
   group_by(lmo_detailed_industry, age_group)|>
   summarise(count=sum(count))|>
@@ -102,7 +103,7 @@ industry_expand_ratio<- vroom(here("data",
                                    pattern = "eunaics")))|>
   clean_names()|>
   filter(lf_stat %in% c("Employed","Unemployed"))|>
-  mutate(naics_5=as.numeric(naics_5))|>
+ # mutate(naics_5=as.numeric(naics_5))|>
   left_join(mapping, by=c("naics_5"="naics"))|>
   na.omit()|>
   group_by(lf_stat, lmo_detailed_industry)|>
