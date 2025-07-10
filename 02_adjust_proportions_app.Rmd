@@ -1,5 +1,5 @@
 ---
-title: "Forecasting proportions of total employment"
+title: "Adjustments"
 output:
   flexdashboard::flex_dashboard:
     orientation: rows
@@ -21,6 +21,7 @@ library(here)
 library(vroom)
 library(plotly)
 library(shiny)
+library(kableExtra)
 library(conflicted)
 conflicts_prefer(vroom::cols)
 conflicts_prefer(vroom::col_double)
@@ -191,7 +192,7 @@ occupation_historic_cagrs <- occupation_historic|>
 
 sliderInput("bc_slope", "Change BC slope",
   min = .99, max = 1.01,
-  value = 1, step = .0001
+  value = .9958, step = .0001
 )
 
 # shiny inputs defined here
@@ -199,7 +200,7 @@ selectInput(
   "margin",
   "What margin do you want to manipulate?",
   c("bc_region", "noc_5", "lmo_ind_code"),
-  "bc_region"
+  "lmo_ind_code"
 )
 ```
 
@@ -400,7 +401,24 @@ observeEvent(input$save, {
 
 -   Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
 
--   Using LFS data from the years 2022:2024 we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+-   Using census 2021 and monthly LFS data from the years 2018:2024, we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+
+-   Specifically, we create a weighted average of Census and LFS proportions, where the weight on Census is 0.78 and the weight on LFS is 0.22.
+
+-   These weights reflect the effective sample size (number of workers covered) of the two sources:
+
+
+```{r, echo=FALSE}
+kable(
+  tibble(
+    Source = c("LFS (7 years)", "Census (2021)"),
+    `Effective N (workers)` = c("~1.4 million", "~5.1 million")
+  ),
+  caption = "Effective sample size of LFS and Census data"
+)|>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
 
 -   We then aggregate the LFS data from 2000 to 2024, creating 582 series (7 regions, 63 industries and 512 occupations) to each of which we apply the linear model:
 

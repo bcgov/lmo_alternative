@@ -7,7 +7,7 @@ library(readxl)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 #constants--------------------------------
-replacement_adjustment <- 14.25 #increase this to make replacement demand go down.
+replacement_adjustment <- 13.2 #increase this to make replacement demand go down.
 #read in data-----------------
 mapping <- read_excel(here("data","mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
   select(naics=naics_5, lmo_detailed_industry)

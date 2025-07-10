@@ -1,4 +1,5 @@
 #libraries-----------------------
+tictoc::tic()
 library(tidyverse)
 library(here)
 library(vroom)
@@ -9,13 +10,16 @@ library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
+census_weight <- .78 #long form 2021 census covered 5.1M workers, 7 years of LFS covered 1.4M (distinct) workers.
 pval_power <- .1 #we raise p-values to this power to create weight on bc's growth rate.
-base_years <- c(2022:2024) #need to change
-base_plus <- 3:13 #lfs base year midpoint is 2023, census was 2021, so forecast starts 3 years later than midpoint of base years.
+base_years <- c(2018:2024) #LFS years used, centered on census 2021.
+base_plus <- 4:14 #base year 2021, so forecast starts 4 years later.
 #functions-----------------------
 get_factor <- function(tbbl, base_plus){
   tbbl <- tbbl|>
-    mutate(series="base")
+    mutate(series="base",
+           positive=employment>0)
+  prop_positive <- mean(tbbl$positive)
   max_year <- max(tbbl$year)
   bound <- bind_rows(tbbl, bc)#adds in top level employment to this series
   mod <- lm(log(employment+1)~year*series, data=bound)|>
@@ -27,9 +31,9 @@ get_factor <- function(tbbl, base_plus){
   pval <- mod|> #what is probability of observing a growth rate at least this different than BC's if null hypothesis is true?
     filter(term=="year:seriesLFS")|>
     pull(p.value)
-  bc_weight <- pval^pval_power #the smaller the p.value, the smaller the weight on bc (more confident that growth factors differ)
+  bc_weight <- ifelse(prop_positive>.75, pval^pval_power, 1) #the smaller the p.value, the smaller the weight on bc (more confident that growth factors differ)
   growth_factor <-(1-bc_weight)*this_growth+(bc_weight)*bc_growth_factor
-  factor <- growth_factor^(base_plus)#forecast starts 3 years later than middle of period used to calculate base shares
+  factor <- growth_factor^(base_plus)#forecast starts base_plus years later than middle of period used to calculate base shares
   year <- (max_year+1):(max_year+11)
   tibble(year=year, factor=factor)
 }
@@ -68,6 +72,25 @@ lfs <- vroom(list.files(here("data","status"), pattern = "_stat", full.names = T
   group_by(year, bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
   summarize(employment=sum(employment))
 
+# allocate noc 41229 across 41220 and 41221--------------------------
+
+reallocated <- lfs|>
+  filter(noc_5 %in% c(41220, 41221, 41229))|>
+  pivot_wider(names_from = noc_5, values_from = employment)|>
+  mutate(prop_41220= `41220`/(`41220`+`41221`),
+         prop_41221= `41221`/(`41220`+`41221`),
+         `41220`=`41220`+ `41229`*prop_41220,
+         `41221`=`41221`+`41229`*prop_41221)|>
+  select(-`41229`, -prop_41220, -prop_41221)|>
+  pivot_longer(cols=c(`41220`, `41221`),
+               names_to = "noc_5",
+               values_to = "employment")|>
+  filter(employment>0)
+
+lfs <- lfs|>
+  filter(!noc_5 %in% c(41220, 41221, 41229))|>
+  bind_rows(reallocated)
+
 lfs_no_aggregates <- lfs|>
   filter(!is.na(bc_region),
          !is.na(noc_5),
@@ -76,6 +99,8 @@ lfs_no_aggregates <- lfs|>
   tsibble(index=year, key=c(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry))|>
   tsibble::fill_gaps(employment=0, .full=TRUE)|>
   tibble()
+
+#census data-----------------------------
 
 census <- tibble(files=list.files(here("data","census")))|>
   mutate(paths=here("data","census", files),
@@ -219,6 +244,16 @@ census|>
          series="census")|>
   write_rds(here("out","census_industry.rds"))
 
+#census by industry:region---------------------
+
+census|>
+  group_by(bc_region, lmo_ind_code, lmo_detailed_industry)|>
+  summarize(employment=sum(employment))|>
+  mutate(year=2021,
+         series="census")|>
+  write_rds(here("out","census_industry_region.rds"))
+
+
 #census by occupation--------------------------
 
 census|>
@@ -251,15 +286,9 @@ agg_and_save(lfs_no_aggregates, noc_5)
 
 weighted_shares <- full_join(lfs_shares, census_shares)|>
   mutate(across(where(is.numeric), ~replace_na(.x, 0)),
-         pre_mod_share=(lfs_share+census_share)/2)|>
-  write_rds(here("out", "weighted_shares.rds"))
+         pre_mod_share=(1-census_weight)*lfs_share+census_weight*census_share)
 
-lfs_shares|>
-  rename(pre_mod_share=lfs_share)|>
-  write_rds(here("out","lfs_shares.rds"))
-
-census_shares|>
-  rename(pre_mod_share=census_share)|>
-  write_rds(here("out","census_shares.rds"))
-
+write_rds(weighted_shares, here("out", "unmodified_shares.rds"))
+write_rds(weighted_shares, here("out","modified","shares.rds"))
 write_rds(bc_forecast, here("out","modified","bc_forecast.rds"))
+tictoc::toc()

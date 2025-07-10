@@ -17,14 +17,27 @@ library(conflicted)
 library(janitor)
 library(readxl)
 conflicts_prefer(dplyr::filter)
-```
 
-```{r}
 #functions------------------------------
+row_to_string <- function(row) {
+  map2_chr(names(row), row, ~ paste0(.x, ": ", .y)) |>
+    paste(collapse = ", ")
+}
+
+get_cagr <- function(tbbl){
+  max_year <- max(tbbl$year)
+  min_year <- min(tbbl$year)
+  start <- tbbl$value[tbbl$year==min_year]
+  end <-  tbbl$value[tbbl$year==max_year]
+  (end/start)^(1/(max_year-min_year))-1 
+}
+
 rich_vs_stokes <- function(tbbl, var1, var2, cor){
   plt <- ggplot(tbbl,  aes({{  var1  }},
-                           {{  var2  }},
-                           colour=year,
+                           {{  var2  }}))+
+    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
+    geom_line(mapping=aes(group=interaction(bc_region, lmo_detailed_industry)), lwd=.2, alpha=.2)+
+    geom_point(mapping=aes(colour=year,
                            text=paste0(
                              "Region: ",
                              bc_region,
@@ -35,12 +48,7 @@ rich_vs_stokes <- function(tbbl, var1, var2, cor){
                              "\n Rich: ",
                              scales::comma({{  var1  }}, accuracy = 1),
                              "\n Stokes: ",
-                             scales::comma({{  var2  }}, accuracy = 1)
-                           )
-  )
-  )+
-    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
-    geom_point(size=.5)+
+                             scales::comma({{  var2  }}, accuracy = 1))), size=.5)+
     scale_colour_viridis_c()+
     scale_x_continuous(trans="log10", labels=scales::comma)+
     scale_y_continuous(trans="log10", labels=scales::comma)+
@@ -50,8 +58,10 @@ rich_vs_stokes <- function(tbbl, var1, var2, cor){
 }
 rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
   plt <- ggplot(tbbl,  aes({{  var1  }},
-                           {{  var2  }},
-                           colour=year,
+                           {{  var2  }}))+
+    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
+    geom_line(mapping=aes(group=description), lwd=.2, alpha=.2)+
+    geom_point(mapping=aes(colour=year,
                            text=paste0(
                              "NOC: ",
                              description,
@@ -60,12 +70,7 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
                              "\n Rich: ",
                              scales::comma({{  var1  }}, accuracy = 1),
                              "\n Stokes: ",
-                             scales::comma({{  var2  }}, accuracy = 1)
-                           )
-  )
-  )+
-    geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
-    geom_point(size=.5)+
+                             scales::comma({{  var2  }}, accuracy = 1))), size=.5)+
     scale_colour_viridis_c()+
     scale_x_continuous(trans="log10", labels=scales::comma)+
     scale_y_continuous(trans="log10", labels=scales::comma)+
@@ -73,24 +78,75 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
 
   plotly::ggplotly(plt, tooltip="text")
 }
-#read in the data----------------------
 
-correct_industries <- read_csv(here("data","mapping", "tidy_2024_naics_to_lmo.csv"))|>
-  select(naics, lmo_detailed_industry)|>
-  select(lmo_detailed_industry)|>
+demand_plot <- function(tbbl, rich, stokes, title){
+  plt <- tbbl|>
+  ggplot(aes(x={{  rich  }}, 
+                           y={{  stokes  }}, 
+                           text=paste0("Region: ", bc_region,
+                                       "\n Industry: ", lmo_detailed_industry,
+                                       "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
+                                       "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
+  geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
+  geom_point(alpha=.25)+
+  scale_x_continuous(trans="log10", labels=scales::comma)+
+  scale_y_continuous(trans="log10", labels=scales::comma)+
+  labs(title=title)
+
+plotly::ggplotly(plt, tooltip="text")
+}
+
+demand_plot2 <- function(tbbl, rich, stokes, title){
+  plt <- tbbl|>
+  ggplot(aes(x={{  rich  }}, 
+                           y={{  stokes  }}, 
+                           text=paste0("NOC: ", noc_5,
+                                       "\n Description: ", description,
+                                       "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
+                                       "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
+  geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
+  geom_point(alpha=.25)+
+  scale_x_continuous(trans="log10", labels=scales::comma)+
+  scale_y_continuous(trans="log10", labels=scales::comma)+
+  labs(title=title)
+
+plotly::ggplotly(plt, tooltip="text")
+}
+
+
+
+#read in the data----------------------
+noc_names <- read_csv(here("data","mapping","noc21descriptions.csv"))|>
+  select(noc_5=lmo_noc, description=class_title)|>
+  distinct()|>
+  mutate(noc_5=str_pad(noc_5, "0", side = "left", width=5))
+
+correct_industries <- read_excel(here("data","mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
+  select(lmo_ind_code, lmo_detailed_industry)|>
   distinct()|>
   ungroup()
+
+census_occupation <- noc_names|>
+  inner_join(read_rds(here("out", "census_occupation.rds")))
+
+census_industry_region <- read_rds(here("out", "census_industry_region.rds"))|>
+  select(-lmo_detailed_industry)|>
+  inner_join(correct_industries)
 
 #my forecasts-----------------------------------
 richs_forecast <- read_rds(here("out","richs_forecast.rds"))
 
 richs_region_industry <- richs_forecast|>
   group_by(bc_region, lmo_ind_code, lmo_detailed_industry, year)|>
-  summarise(richs_employment=sum(employment))
-
+  summarise(richs_employment=sum(employment, na.rm = TRUE),
+            richs_expansion=sum(expansion_demand, na.rm = TRUE),
+            richs_replacement=sum(replacement_demand, na.rm = TRUE))
+            
 richs_occupation <- richs_forecast|>
   group_by(noc_5, year)|>
-  summarise(richs_employment=sum(employment))
+  summarise(richs_employment=sum(employment, na.rm = TRUE),
+            richs_expansion=sum(expansion_demand, na.rm = TRUE),
+            richs_replacement=sum(replacement_demand, na.rm = TRUE))
 
 correct_regions <- richs_region_industry|>
   ungroup()|>
@@ -98,16 +154,13 @@ correct_regions <- richs_region_industry|>
   distinct()
 
 #lfs data-----------------------
-occ_lfs <-  read_excel(here("data", "Labour force status for 5 digit NOC 2014-2023.xlsx"), sheet = "Employed", skip=3)|>
-    pivot_longer(cols = starts_with("2"), names_to = "year")|>
-    clean_names()|>
-  rename(description=class_title)|>
-   mutate(noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5),
-          description=if_else(noc_5=="00018","Senior managers - public and private sector", description))|>
-  group_by(noc_5, description, year)|>
-  summarize(value=sum(value, na.rm = TRUE))
 
-ind_lfs_file <- here("data","Employment for 64 LMO Industries 2000-2023.xlsx")
+occ_lfs <- read_rds(here("out","historic_noc_5.rds"))|>
+  select(noc_5, year, value=employment)|>
+  inner_join(noc_names)
+
+
+ind_lfs_file <- here("data","Employment for 64 LMO Industries 2000-2024.xlsx")
 
 ind_lfs <- excel_sheets(ind_lfs_file) %>%
   set_names() %>%
@@ -128,7 +181,7 @@ stokes_employment_industry <- read_excel(here("data","stokes_data", "employment_
   clean_names()|>
   ungroup()|>
   rename(lmo_detailed_industry=industry)|>
-  fuzzyjoin::stringdist_join(correct_industries)|>
+  fuzzyjoin::stringdist_join(correct_industries|>select(lmo_detailed_industry))|>
   rename(lmo_detailed_industry=lmo_detailed_industry.y)|>
   select(bc_region=geographic_area, lmo_detailed_industry, year, stokes_employment)|>
   filter(bc_region!="British Columbia")|>
@@ -144,37 +197,89 @@ stokes_employment_occupation <- read_excel(here("data","stokes_data", "employmen
   pivot_longer(cols=starts_with("2"), names_to = "year", values_to = "stokes_employment")|>
   clean_names()|>
   filter(geographic_area!="British Columbia")|>
-  group_by(noc, description, year)|>
+  group_by(noc, year)|>
   summarize(stokes_employment=sum(stokes_employment))|>
   mutate(year=as.numeric(year),
-         noc=str_sub(noc, 2))
+         noc_5=str_sub(noc, 2))|>
+  inner_join(noc_names)
+
+stokes_jo_occupation <- read_excel(here("data","stokes_data", "job_openings_occupation.xlsx"), skip = 3)|>
+  filter(`Geographic Area`=="British Columbia",
+         Variable %in% c("Expansion Demand", "Replacement Demand"),
+         NOC!="#T")|>
+  select(NOC, Variable, starts_with("2"))|>
+  pivot_longer(cols=starts_with("2"), names_to = "year", values_to = "stokes")|>
+  pivot_wider(names_from = Variable, values_from = stokes)|>
+  rename(stokes_expansion=`Expansion Demand`,
+         stokes_replacement=`Replacement Demand`)|>
+  mutate(noc_5=str_remove_all(NOC, "#"),
+         year=as.numeric(year), .before=everything())|>
+  select(-NOC)
+
+stokes_jo_region_industry <- read_excel(here("data","stokes_data", "job_openings_industry.xlsx"), skip = 3)|>
+  filter(Variable %in% c("Expansion Demand", "Replacement Demand"))|>
+  pivot_longer(cols=starts_with("2"), names_to = "year", values_to = "stokes")|>
+  clean_names()|>
+  ungroup()|>
+  rename(lmo_detailed_industry=industry)|>
+  fuzzyjoin::stringdist_join(correct_industries|>select(lmo_detailed_industry))|>
+  rename(lmo_detailed_industry=lmo_detailed_industry.y)|>
+  select(bc_region=geographic_area, lmo_detailed_industry, year, variable, stokes)|>
+  filter(bc_region!="British Columbia")|>
+  mutate(year=as.numeric(year),
+         bc_region=if_else(bc_region=="Mainland South West","Lower Mainland-Southwest", bc_region),
+         bc_region=if_else(bc_region=="Vancouver Island Coast","Vancouver Island and Coast", bc_region)
+  )|>
+  fuzzyjoin::stringdist_full_join(correct_regions)|>
+  rename(bc_region=bc_region.y)|>
+  select(-bc_region.x)|>
+  pivot_wider(names_from = variable, values_from = stokes)|>
+  rename(stokes_expansion=`Expansion Demand`,
+         stokes_replacement=`Replacement Demand`)
 
 #merging forecasts------------------------------
 
-region_industry <- full_join(richs_region_industry, stokes_employment_industry)|>
-  mutate(richs_employment=if_else(is.na(richs_employment), 0, richs_employment))
+jo_region_industry <- full_join(richs_region_industry, stokes_jo_region_industry)|>
+  filter(year>min(year))|>
+  select(-richs_employment)|>
+  group_by(bc_region, lmo_detailed_industry)|>
+  summarize(richs_expansion=sum(richs_expansion, na.rm = TRUE),
+            richs_replacement=sum(richs_replacement, na.rm = TRUE),
+            stokes_expansion=sum(stokes_expansion, na.rm = TRUE),
+            stokes_replacement=sum(stokes_replacement, na.rm = TRUE))
+  
+jo_occupation <- full_join(richs_occupation, stokes_jo_occupation)|>
+  filter(year>min(year))|>
+  select(-richs_employment)|>
+  group_by(noc_5)|>
+  summarize(richs_expansion=sum(richs_expansion, na.rm = TRUE),
+            richs_replacement=sum(richs_replacement, na.rm = TRUE),
+            stokes_expansion=sum(stokes_expansion, na.rm = TRUE),
+            stokes_replacement=sum(stokes_replacement, na.rm = TRUE))|>
+  left_join(noc_names)
 
-occupation <- full_join(richs_occupation, stokes_employment_occupation, by=c("noc_5"="noc", "year"="year"))|>
-  mutate(richs_employment=if_else(is.na(richs_employment), 0, richs_employment))
+employment_region_industry <- full_join(richs_region_industry, stokes_employment_industry)
+employment_occupation <- full_join(richs_occupation, stokes_employment_occupation)
 
 #correlations between forecasts----------------------------
 
-industry_employment_cor <- cor(region_industry$richs_employment, 
-                               region_industry$stokes_employment, 
-                               method = "pearson")
+industry_employment_cor <- cor(employment_region_industry$richs_employment, 
+                               employment_region_industry$stokes_employment, 
+                               method = "pearson", 
+                               use="pairwise.complete.obs")
 
-occupation_employment_cor <- cor(occupation$richs_employment, 
-                               occupation$stokes_employment, 
+occupation_employment_cor <- cor(employment_occupation$richs_employment, 
+                               employment_occupation$stokes_employment, 
                                method = "pearson",
                                use="pairwise.complete.obs")
 
 #for dropdowns
-occupations <- unique(occupation$description)
-industries <- unique(region_industry$lmo_detailed_industry)
-regions <- unique(region_industry$bc_region)
+occupations <- unique(employment_occupation$description)
+industries <- unique(employment_region_industry$lmo_detailed_industry)
+regions <- unique(employment_region_industry$bc_region)
 ```
 
-By Industry:Region
+Employment by Industry:Region
 =====================================  
 
 Inputs {.sidebar}
@@ -182,7 +287,6 @@ Inputs {.sidebar}
 
 * If you hover over the plot on the left, a tooltip displays the industry and region.
 * The further you are from the 45 degree line, the greater the difference between Stokes and Rich.
-* Not much daylight between the forecasts.
 
 
 ```{r}
@@ -202,11 +306,15 @@ selectInput(
 )
 
 industry_fcasts <- reactive({
-  region_industry|>
+  employment_region_industry|>
     filter(lmo_detailed_industry==input$industry,
            bc_region==input$region)|>
     select(lmo_detailed_industry, bc_region, year, contains("employment"))|>
-    pivot_longer(cols = contains("employment"))
+    pivot_longer(cols = contains("employment"))|>
+    group_by(lmo_detailed_industry, bc_region, name)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr))|>
+    unnest(data)
 })
 
 industry_lfs <- reactive({
@@ -215,7 +323,11 @@ industry_lfs <- reactive({
              bc_region==input$region)|>
       select(lmo_detailed_industry, bc_region, year, value)|>
     mutate(name="LFS",
-           year=as.numeric(year))
+           year=as.numeric(year))|>
+    group_by(lmo_detailed_industry, bc_region)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr))|>
+    unnest(data)
 })
 ```
 
@@ -226,7 +338,7 @@ Column {data-width=500}
 ### Forecast comparison of all Industry:Region combinations
     
 ```{r}
-rich_vs_stokes(region_industry, richs_employment, stokes_employment, industry_employment_cor)
+rich_vs_stokes(employment_region_industry, richs_employment, stokes_employment, industry_employment_cor)
 ```
    
 Column {data-width=500}
@@ -236,19 +348,38 @@ Column {data-width=500}
 
 ```{r}
 renderPlotly({
-  bind_rows(industry_lfs(),industry_fcasts())|>
-  ggplot(aes(year, value, colour=name))+
-  geom_line()+
+  plt <- ggplot()+
+  geom_point(aes(year, 
+                 employment, 
+                 colour=series,
+                 text=paste0(
+                   "2021 Census Employment: ",
+                   employment)), census_industry_region|>filter(lmo_detailed_industry==input$industry,
+             bc_region==input$region))+ #need to fix this
+  geom_line(aes(year, 
+                value, 
+                colour=name,
+                group=name,
+                text=paste0(str_to_title(str_replace(name,"_"," ")),
+                   "\n Year: ",
+                   year,
+                   "\n Employment: ",
+                   scales::comma(value, accuracy = 1),
+                   "\n CAGR: ",
+                   scales::percent(cagr, accuracy = .1))),
+            bind_rows(industry_lfs(),industry_fcasts()))+
   labs(x=NULL, 
        y="Employment",
        colour=NULL,
        title=paste(input$industry, input$region, sep=": "))+
   scale_y_continuous(labels = scales::comma)
+  
+plotly::ggplotly(plt, tooltip="text")
 })
 ```   
  
 
-By Occupation
+Employment by Occupation
 =====================================
 
 Inputs {.sidebar}
@@ -256,7 +387,6 @@ Inputs {.sidebar}
 
 * If you hover over the plot on the left, a tooltip displays the occupation.
 * The further you are from the 45 degree line, the greater the difference between Stokes and Rich.
-* The forecasts are substantially more different by occupation, and I would argue that my forecasts better reflect the LFS data.
 
 
 ```{r}
@@ -268,17 +398,25 @@ selectInput(
 )
 
 occupation_fcasts <- reactive({
-  occupation|>
+  employment_occupation|>
     filter(description==input$occupation)|>
     select(noc_5, year, contains("employment"))|>
-    pivot_longer(cols = contains("employment"))
+    pivot_longer(cols = contains("employment"))|>
+    group_by(noc_5, name)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr))|>
+    unnest(data)
 })
 
 occupation_lfs <- reactive({
   occ_lfs|>
     filter(description==input$occupation)|>
     mutate(name="LFS",
-           year=as.numeric(year))
+           year=as.numeric(year))|>
+    group_by(noc_5, description)|>
+    nest()|>
+    mutate(cagr=map_dbl(data, get_cagr))|>
+    unnest(data)
 })
 ```
 
@@ -289,7 +427,7 @@ Column {data-width=500}
 ### Forecast comparison of all occupations
     
 ```{r}
-rich_vs_stokes2(occupation, richs_employment, stokes_employment, occupation_employment_cor)
+rich_vs_stokes2(employment_occupation, richs_employment, stokes_employment, occupation_employment_cor)
 ```
    
 Column {data-width=500}
@@ -299,17 +437,99 @@ Column {data-width=500}
 
 ```{r, fig.retina=2}
 renderPlotly({
-bind_rows(occupation_lfs(), occupation_fcasts())|>
-  ggplot(aes(year, value, colour=name))+
-  geom_line()+
+  plt <- ggplot()+
+  geom_point(aes(year, 
+                 employment, 
+                 colour=series,
+                 text=paste0(
+                   "2021 Census Employment: ",
+                   employment)), 
+             census_occupation|>filter(description==input$occupation))+
+  geom_line(aes(year, 
+                value, 
+                colour=name,
+                group=name,
+                 text=paste0(str_to_title(str_replace(name,"_"," ")),
+                   "\n Year: ",
+                   year,
+                   "\n Employment: ",
+                   scales::comma(value, accuracy = 1),
+                   "\n CAGR: ",
+                   scales::percent(cagr, accuracy = .1))), 
+            bind_rows(occupation_lfs(),occupation_fcasts()))+
   labs(x=NULL, 
        y="Employment",
        colour=NULL,
        title=input$occupation)+
   scale_y_continuous(labels = scales::comma)
+
+plotly::ggplotly(plt, tooltip="text")
 })
 ```   
  
+Demand
+=====================================
+
+Column {data-width=500}
+-------------------------------------
+    
+### Expansion Demand by Industry:Region
+
+```{r}
+title <- jo_region_industry|>
+  ungroup()|>
+  summarize(rich=scales::comma(sum(richs_expansion, na.rm = TRUE)),
+            stokes=scales::comma(sum(stokes_expansion, na.rm = TRUE)),
+            correlation=round(cor(richs_expansion, stokes_expansion, method = "pearson", use="pairwise.complete.obs"),3))|>
+  row_to_string()
+
+demand_plot(jo_region_industry, richs_expansion, stokes_expansion, title)
+```
+    
+
+### Replacement Demand by Industry:Region
+
+```{r}
+title <- jo_region_industry|>
+  ungroup()|>
+  summarize(rich=scales::comma(sum(richs_replacement, na.rm = TRUE)),
+            stokes=scales::comma(sum(stokes_replacement, na.rm = TRUE)),
+            correlation=round(cor(richs_replacement, stokes_replacement, method = "pearson", use="pairwise.complete.obs"),3))|>
+  row_to_string()
+
+demand_plot(jo_region_industry, richs_replacement, stokes_replacement, title)
+```
+ 
+Column {data-width=500}
+-------------------------------------
+   
+### Expansion Demand by Occupation
+
+```{r}
+title <- jo_occupation|>
+  ungroup()|>
+  summarize(rich=scales::comma(sum(richs_expansion, na.rm = TRUE)),
+            stokes=scales::comma(sum(stokes_expansion, na.rm = TRUE)),
+            correlation=round(cor(richs_expansion, stokes_expansion, method = "pearson", use="pairwise.complete.obs"),3))|>
+  row_to_string()
+
+demand_plot2(jo_occupation, richs_expansion, stokes_expansion, title)
+```
+
+### Replacement Demand by Occupation
+
+```{r}
+
+title <- jo_occupation|>
+  ungroup()|>
+  summarize(rich=scales::comma(sum(richs_replacement, na.rm = TRUE)),
+            stokes=scales::comma(sum(stokes_replacement, na.rm = TRUE)),
+            correlation=round(cor(richs_replacement, stokes_replacement, method = "pearson", use="pairwise.complete.obs"),3))|>
+  row_to_string()
+
+demand_plot2(jo_occupation, richs_replacement, stokes_replacement, title)
+```
+
 
 
 
