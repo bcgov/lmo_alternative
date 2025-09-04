@@ -134,7 +134,7 @@ census_industry_region <- read_rds(here("out", "census_industry_region.rds"))|>
   inner_join(correct_industries)
 
 #my forecasts-----------------------------------
-richs_forecast <- read_rds(here("out","richs_forecast.rds"))
+richs_forecast <- read_rds(here("out", "richs_forecast.rds"))
 
 richs_region_industry <- richs_forecast|>
   group_by(bc_region, lmo_ind_code, lmo_detailed_industry, year)|>

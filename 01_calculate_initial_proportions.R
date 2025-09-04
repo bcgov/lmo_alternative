@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::lag)
 #constants---------------------
 census_weight <- .78 #long form 2021 census covered 5.1M workers, 7 years of LFS covered 1.4M (distinct) workers.
 pval_power <- .1 #we raise p-values to this power to create weight on bc's growth rate.
-base_years <- c(2018:2024) #LFS years used, centered on census 2021.
-base_plus <- 4:14 #base year 2021, so forecast starts 4 years later.
+base_years <- c(2018:2024) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
+base_plus <- 4:14 #base year 2021, so forecast starts x years later.(increment start and end each year)
 #functions-----------------------
 get_factor <- function(tbbl, base_plus){
   tbbl <- tbbl|>
@@ -100,6 +100,8 @@ lfs_no_aggregates <- lfs|>
   tsibble::fill_gaps(employment=0, .full=TRUE)|>
   tibble()
 
+write_rds(lfs_no_aggregates, here("out","lfs_no_aggregates.rds"))
+
 #census data-----------------------------
 
 census <- tibble(files=list.files(here("data","census")))|>
@@ -157,7 +159,7 @@ bc_forecast <- our_forecast|>
   bind_rows(bc_with_cagr, budget)|>
   arrange(year)
 
-#' BASELINE LFS SHARES: (2022-2024)------------
+#' BASELINE LFS SHARES: (2018:2024)------------
 
 lfs_base_share <- lfs|>
   filter(year %in% base_years, #note that some NOCs have either missing or zero employment for the base years

@@ -192,7 +192,7 @@ occupation_historic_cagrs <- occupation_historic|>
 
 sliderInput("bc_slope", "Change BC slope",
   min = .99, max = 1.01,
-  value = .9958, step = .0001
+  value = 1, step = .0001
 )
 
 # shiny inputs defined here
@@ -430,10 +430,10 @@ $$ log(Employment+1) \sim time\times series+\epsilon$$
 -   The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
 -   If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole.
 -   We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.1$, and the weight on "this series" growth factor is $1-p.value^.1$.
--   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. e.g. if p.value=.00001 (we are really quite confident that this series is growing at a different rate than BC as a whole), the weight on BC's growth factor is still .68.
+-   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. i.e. if p.value=.00001 the weight on BC's growth factor is still .32.
 -   We then apply these weighted growth factors to adjust the baseline proportions.
--   For example, suppose that a region/industry/occupation combination accounted for 1% of the BC labour market over the years 2022:2024. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
--   For the forecast year $t$ years after 2022, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
+-   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
+-   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
 -   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
 -   This is in contrast to the baseline *levels*, where the sparsity alone indicates strong dependency between region, industry and occupation.
 -   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
