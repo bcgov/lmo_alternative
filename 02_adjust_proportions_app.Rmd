@@ -403,7 +403,7 @@ observeEvent(input$save, {
 
 -   Using census 2021 and monthly LFS data from the years 2018:2024, we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
 
--   Specifically, we create a weighted average of Census and LFS proportions, where the weight on Census is 0.78 and the weight on LFS is 0.22.
+-   Specifically, we create a weighted average of Census and LFS proportions, where the weight on Census is 0.81 and the weight on LFS is 0.19.
 
 -   These weights reflect the effective sample size (number of workers covered) of the two sources:
 
@@ -412,7 +412,7 @@ observeEvent(input$save, {
 kable(
   tibble(
     Source = c("LFS (7 years)", "Census (2021)"),
-    `Effective N (workers)` = c("~1.4 million", "~5.1 million")
+    `Effective N (workers)` = c("~1.1 million", "~4.8 million")
   ),
   caption = "Effective sample size of LFS and Census data"
 )|>
@@ -420,15 +420,15 @@ kable(
 ```
 
 
--   We then aggregate the LFS data from 2000 to 2024, creating 583 series (BC as a whole, 7 regions, 63 industries and 512 occupations) to each of which we apply the linear model:
+-   We then aggregate the LFS data from 2000 to 2024, creating 582 slices of BC (7 regions, 63 industries and 512 occupations), to each of which we apply the linear model:
 
 $$ log(Employment+1) \sim time+\epsilon$$
 
--   Note that the smaller the slice of data the more noisy the series.
--   The extent to which we should trust the regression estimates should depend on the relative noisiness of the series. 
--   Empirical Bayes is a method that shrinks the slope estimates towards BC's slope.
+-   The smaller the slice the more noisy it is.
+-   Trust in the regression estimates should depend on how noisy the series is.  
+-   Empirical Bayes is a method that shrinks the slope estimates towards the slope of BC as a whole.
 -   The degree of shrinkage depends on the variance of the slope estimate (standard error squared), relative to the variance of the slope deviations (difference between each slice's slope estimate and BC's slope estimate).  
--   We then apply the shrunken growth factors to adjust the baseline proportions.
+-   We then apply these shrunken growth factors to adjust the baseline proportions over the forecast horizon.
 -   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
 -   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
 -   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.

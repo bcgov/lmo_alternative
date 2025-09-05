@@ -10,9 +10,9 @@ library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
-census_weight <- .78 #long form 2021 census covered 5.1M workers, 7 years of LFS covered 1.4M (distinct) workers.
+census_weight <- 0.81356 #long form 2021 census covered 4.8M workers, 7 years of LFS covered 1.1M (distinct) workers.
 base_years <- c(2018:2024) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
-base_plus <- 4:14 #base year 2021, so forecast starts x years later.(increment start and end each year)
+base_plus <- 4:14 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
 
 #functions-----------------------
 
