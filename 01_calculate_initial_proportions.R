@@ -11,31 +11,23 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
 census_weight <- .78 #long form 2021 census covered 5.1M workers, 7 years of LFS covered 1.4M (distinct) workers.
-pval_power <- .1 #we raise p-values to this power to create weight on bc's growth rate.
 base_years <- c(2018:2024) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
 base_plus <- 4:14 #base year 2021, so forecast starts x years later.(increment start and end each year)
+
 #functions-----------------------
-get_factor <- function(tbbl, base_plus){
-  tbbl <- tbbl|>
-    mutate(series="base",
-           positive=employment>0)
-  prop_positive <- mean(tbbl$positive)
+
+est_growth <- function(tbbl) {
   max_year <- max(tbbl$year)
-  bound <- bind_rows(tbbl, bc)#adds in top level employment to this series
-  mod <- lm(log(employment+1)~year*series, data=bound)|>
-    broom::tidy()
-  this_growth <- mod|> #the estimated growth factor for this series
-    filter(term=="year")|>
-    pull(estimate)|>
-    exp()
-  pval <- mod|> #what is probability of observing a growth rate at least this different than BC's if null hypothesis is true?
-    filter(term=="year:seriesLFS")|>
-    pull(p.value)
-  bc_weight <- ifelse(prop_positive>.75, pval^pval_power, 1) #the smaller the p.value, the smaller the weight on bc (more confident that growth factors differ)
-  growth_factor <-(1-bc_weight)*this_growth+(bc_weight)*bc_growth_factor
-  factor <- growth_factor^(base_plus)#forecast starts base_plus years later than middle of period used to calculate base shares
-  year <- (max_year+1):(max_year+11)
-  tibble(year=year, factor=factor)
+  year_term <- lm(log(employment+1) ~ year, data=tbbl)|>
+    tidy()|>
+    filter(term=="year")
+  data=tibble(year=(max_year+1):(max_year+11))
+  tibble(slope=year_term$estimate, var=year_term$std.error^2, data=list(data))
+}
+
+exponentiate <- function(tbbl, growth_factor){
+  tbbl|>
+    mutate(multiplier=growth_factor^base_plus)
 }
 
 agg_and_save <- function(tbbl, var1, var2=NULL){
@@ -143,11 +135,12 @@ bc <- lfs|>
 bc_with_cagr <- bc|>
   mutate(cagr=(employment[year==max(year)]/employment[year==(max(year)-10)])^.1-1)
 
-bc_growth_factor <- lm(log(employment)~year, data=bc)|>
+bc_slope <- lm(log(employment)~year, data=bc)|>
   broom::tidy()|> #the estimated growth factor for this series
   filter(term=="year")|>
-  pull(estimate)|>
-  exp()
+  pull(estimate)
+
+bc_growth_factor <- exp(bc_slope)
 
 our_forecast <- tibble(year=(max(budget$year)+1):(max(budget$year)+6))|>
   mutate(employment=tail(budget$employment, n=1)*bc_growth_factor^(year-max(budget$year)),
@@ -182,11 +175,23 @@ regional_factor <- lfs|>
   group_by(year, bc_region)|>
   summarize(employment=sum(employment))|>
   group_by(bc_region)|>
-  nest()|>
-  mutate(factors=map(data, get_factor, base_plus))|>
-  unnest(factors)|>
+  nest()|>#changes below
+  mutate(est_growth=map(data, est_growth))|>
   select(-data)|>
-  rename(regional_factor=factor)
+  unnest(est_growth)|>
+  ungroup()|>
+  mutate(bc_slope=bc_slope,
+         tau2=var(slope-bc_slope),
+         weight=(tau2 / (tau2 + var)),
+         shrunk_slope = weight * slope + (1 - weight) * bc_slope,
+         growth_factor=exp(shrunk_slope)
+  )|>
+  select(bc_region, growth_factor, data)|>
+  mutate(data=map2(data, growth_factor, exponentiate))|>
+  select(-growth_factor)|>
+  unnest(data)|>
+  rename(regional_factor=multiplier)
+
 
 #INDUSTRY GROWTH FACTORS---------------
 industry_factor <- lfs|>
@@ -197,10 +202,22 @@ industry_factor <- lfs|>
   group_by(lmo_ind_code, lmo_detailed_industry)|>
   select(-bc_region, -noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, base_plus))|>
-  unnest(factors)|>
+  mutate(est_growth=map(data, est_growth))|>
   select(-data)|>
-  rename(industry_factor=factor)
+  unnest(est_growth)|>
+  ungroup()|>
+  mutate(bc_slope=bc_slope,
+         tau2=var(slope-bc_slope),
+         weight=(tau2 / (tau2 + var)),
+         shrunk_slope = weight * slope + (1 - weight) * bc_slope,
+         growth_factor=exp(shrunk_slope)
+  )|>
+  select(contains("lmo"), growth_factor, data)|>
+  mutate(data=map2(data, growth_factor, exponentiate))|>
+  select(-growth_factor)|>
+  unnest(data)|>
+  rename(industry_factor=multiplier)
+
 
 #OCCUPATION GROWTH FACTORS---------------------------------
 occupation_factor <- lfs|>
@@ -215,10 +232,21 @@ occupation_factor <- lfs|>
   tibble()|>
   group_by(noc_5)|>
   nest()|>
-  mutate(factors=map(data, get_factor, base_plus))|>
-  unnest(factors)|>
+  mutate(est_growth=map(data, est_growth))|>
   select(-data)|>
-  rename(occupation_factor=factor)
+  unnest(est_growth)|>
+  ungroup()|>
+  mutate(bc_slope=bc_slope,
+         tau2=var(slope-bc_slope),
+         weight=(tau2 / (tau2 + var)),
+         shrunk_slope = weight * slope + (1 - weight) * bc_slope,
+         growth_factor=exp(shrunk_slope)
+  )|>
+  select(noc_5, growth_factor, data)|>
+  mutate(data=map2(data, growth_factor, exponentiate))|>
+  select(-growth_factor)|>
+  unnest(data)|>
+  rename(occupation_factor=multiplier)
 
 # LFS forecast shares --------------------------
 lfs_shares <- left_join(lfs_base_share, regional_factor)|>

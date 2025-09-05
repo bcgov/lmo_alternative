@@ -420,18 +420,15 @@ kable(
 ```
 
 
--   We then aggregate the LFS data from 2000 to 2024, creating 582 series (7 regions, 63 industries and 512 occupations) to each of which we apply the linear model:
+-   We then aggregate the LFS data from 2000 to 2024, creating 583 series (BC as a whole, 7 regions, 63 industries and 512 occupations) to each of which we apply the linear model:
 
-$$ log(Employment+1) \sim time\times series+\epsilon$$
+$$ log(Employment+1) \sim time+\epsilon$$
 
--   Note that "series" is a categorical variable, with levels "this series" and "BC as a whole".
--   Give the interaction between time and series, we are estimating a separate relationship between Employment and time for the two series (both slopes and intercepts can differ)
--   The interaction term in the regression gives an indication of the difference in growth rates.
--   The p.value associated with the interaction term tells us what the probability of observing a difference in slope at least this great if the null hypothesis (same slope) is true.
--   If p.value $\approx$ 0, the series is likely growing at a different rate than BC as a whole.
--   We create a weighted average of the growth factors, where the weight on BC's growth factor is $p.value^.1$, and the weight on "this series" growth factor is $1-p.value^.1$.
--   Note that this is a pretty aggressive shrinkage towards BC's overall growth factor. i.e. if p.value=.00001 the weight on BC's growth factor is still .32.
--   We then apply these weighted growth factors to adjust the baseline proportions.
+-   Note that the smaller the slice of data the more noisy the series.
+-   The extent to which we should trust the regression estimates should depend on the relative noisiness of the series. 
+-   Empirical Bayes is a method that shrinks the slope estimates towards BC's slope.
+-   The degree of shrinkage depends on the variance of the slope estimate (standard error squared), relative to the variance of the slope deviations (difference between each slice's slope estimate and BC's slope estimate).  
+-   We then apply the shrunken growth factors to adjust the baseline proportions.
 -   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
 -   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
 -   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
