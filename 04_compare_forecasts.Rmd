@@ -37,7 +37,7 @@ rich_vs_stokes <- function(tbbl, var1, var2, cor){
                            {{  var2  }}))+
     geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
     geom_line(mapping=aes(group=interaction(bc_region, lmo_detailed_industry)), lwd=.2, alpha=.2)+
-    geom_point(mapping=aes(colour=year,
+    geom_point(mapping=aes(fill=year,
                            text=paste0(
                              "Region: ",
                              bc_region,
@@ -48,8 +48,9 @@ rich_vs_stokes <- function(tbbl, var1, var2, cor){
                              "\n Rich: ",
                              scales::comma({{  var1  }}, accuracy = 1),
                              "\n Stokes: ",
-                             scales::comma({{  var2  }}, accuracy = 1))), size=.5)+
-    scale_colour_viridis_c()+
+                             scales::comma({{  var2  }}, accuracy = 1))),
+                shape = 21, size=1.5, colour = "black", stroke=.25)+
+    scale_fill_viridis_c()+
     scale_x_continuous(trans="log10", labels=scales::comma)+
     scale_y_continuous(trans="log10", labels=scales::comma)+
     labs(title=paste("correlation: ",round(cor,3)))
@@ -61,7 +62,7 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
                            {{  var2  }}))+
     geom_abline(slope = 1, intercept = 0, colour="white", lwd=2)+
     geom_line(mapping=aes(group=description), lwd=.2, alpha=.2)+
-    geom_point(mapping=aes(colour=year,
+    geom_point(mapping=aes(fill=year,
                            text=paste0(
                              "NOC: ",
                              description,
@@ -70,8 +71,9 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
                              "\n Rich: ",
                              scales::comma({{  var1  }}, accuracy = 1),
                              "\n Stokes: ",
-                             scales::comma({{  var2  }}, accuracy = 1))), size=.5)+
-    scale_colour_viridis_c()+
+                             scales::comma({{  var2  }}, accuracy = 1))),
+                shape = 21, size=1.5, colour = "black", stroke=.25)+
+    scale_fill_viridis_c()+
     scale_x_continuous(trans="log10", labels=scales::comma)+
     scale_y_continuous(trans="log10", labels=scales::comma)+
     labs(title=paste("correlation: ",round(cor,3)))
@@ -79,41 +81,54 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
   plotly::ggplotly(plt, tooltip="text")
 }
 
+find_corr_outliers <- function(tbbl, rich, stokes, n) {#note that ties are dropped.
+  fmla <- reformulate(deparse(substitute(stokes)), deparse(substitute(rich)))
+  fit <- lm(fmla, data = tbbl)
+  cooks <- cooks.distance(fit)
+  distance <- log(cooks[order(cooks, decreasing = TRUE)])
+  bind_cols(tbbl[order(cooks, decreasing = TRUE), ], log_distance=distance)
+}
+
+#demand plot----------------------------------------------
 demand_plot <- function(tbbl, rich, stokes, title){
   plt <- tbbl|>
-  ggplot(aes(x={{  rich  }}, 
-                           y={{  stokes  }}, 
-                           text=paste0("Region: ", bc_region,
-                                       "\n Industry: ", lmo_detailed_industry,
-                                       "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
-                                       "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
+    ggplot(mapping=aes(x={{  rich  }}, 
+                       y={{  stokes  }},
+                       fill=log_distance, 
+                       text=paste0("Region: ", bc_region,
+                                   "\n Industry: ", lmo_detailed_industry,
+                                   "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
+                                   "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
   geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
-  geom_point(alpha=.25)+
+  geom_point(shape = 21, size=1.5, colour = "black", stroke=.25)+  
+  scale_fill_viridis_c()+
   scale_x_continuous(trans="log10", labels=scales::comma)+
   scale_y_continuous(trans="log10", labels=scales::comma)+
-  labs(title=title)
+  labs(title=title,
+       fill="Log(Cook's Distance)")
 
 plotly::ggplotly(plt, tooltip="text")
 }
 
 demand_plot2 <- function(tbbl, rich, stokes, title){
   plt <- tbbl|>
-  ggplot(aes(x={{  rich  }}, 
-                           y={{  stokes  }}, 
-                           text=paste0("NOC: ", noc_5,
-                                       "\n Description: ", description,
-                                       "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
-                                       "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
+    ggplot(mapping=aes(x={{  rich  }}, 
+                       y={{  stokes  }},
+                       fill=log_distance,
+                       text=paste0("NOC: ", noc_5,
+                                   "\n Description: ", description,
+                                   "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
+                                   "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
   geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
-  geom_point(alpha=.25)+
+  geom_point(shape = 21, size=1.5, colour = "black", stroke=.25)+    
+  scale_fill_viridis_c()+
   scale_x_continuous(trans="log10", labels=scales::comma)+
   scale_y_continuous(trans="log10", labels=scales::comma)+
-  labs(title=title)
+  labs(title=title,
+       fill="Log(Cook's Distance)")
 
 plotly::ggplotly(plt, tooltip="text")
 }
-
-
 
 #read in the data----------------------
 noc_names <- read_csv(here("data","mapping","noc21descriptions.csv"))|>
@@ -483,7 +498,9 @@ title <- jo_region_industry|>
             correlation=round(cor(richs_expansion, stokes_expansion, method = "pearson", use="pairwise.complete.obs"),3))|>
   row_to_string()
 
-demand_plot(jo_region_industry, richs_expansion, stokes_expansion, title)
+jo_region_industry|>
+  find_corr_outliers(richs_expansion, stokes_expansion)|>
+  demand_plot(richs_expansion, stokes_expansion, title)
 ```
     
 
@@ -497,7 +514,9 @@ title <- jo_region_industry|>
             correlation=round(cor(richs_replacement, stokes_replacement, method = "pearson", use="pairwise.complete.obs"),3))|>
   row_to_string()
 
-demand_plot(jo_region_industry, richs_replacement, stokes_replacement, title)
+jo_region_industry|>
+  find_corr_outliers(richs_replacement, stokes_replacement)|>
+  demand_plot(richs_replacement, stokes_replacement, title)
 ```
  
 Column {data-width=500}
@@ -513,13 +532,14 @@ title <- jo_occupation|>
             correlation=round(cor(richs_expansion, stokes_expansion, method = "pearson", use="pairwise.complete.obs"),3))|>
   row_to_string()
 
-demand_plot2(jo_occupation, richs_expansion, stokes_expansion, title)
+jo_occupation|>
+  find_corr_outliers(richs_expansion, stokes_expansion)|>
+  demand_plot2(richs_expansion, stokes_expansion, title)
 ```
 
 ### Replacement Demand by Occupation
 
 ```{r}
-
 title <- jo_occupation|>
   ungroup()|>
   summarize(rich=scales::comma(sum(richs_replacement, na.rm = TRUE)),
@@ -527,7 +547,9 @@ title <- jo_occupation|>
             correlation=round(cor(richs_replacement, stokes_replacement, method = "pearson", use="pairwise.complete.obs"),3))|>
   row_to_string()
 
-demand_plot2(jo_occupation, richs_replacement, stokes_replacement, title)
+jo_occupation|>
+  find_corr_outliers(richs_replacement, stokes_replacement)|>
+  demand_plot2(richs_replacement, stokes_replacement, title)
 ```
 
 
