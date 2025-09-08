@@ -2,7 +2,7 @@
 title: "Adjustments"
 output:
   flexdashboard::flex_dashboard:
-    orientation: rows
+    orientation: columns
     vertical_layout: fill
 runtime: shiny
 resource_files:
@@ -23,11 +23,14 @@ library(plotly)
 library(shiny)
 library(kableExtra)
 library(conflicted)
+library(viridis)
 conflicts_prefer(vroom::cols)
 conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
+conflicts_prefer(plotly::layout)
 cagr_horizon <- 10
+options(scipen = 999)
 #functions--------------------------------------
 margin_plot <- function(tbbl, tbbl2, margin){
   plt <- ggplot()+
@@ -128,6 +131,7 @@ occ_plot <- function(pg){
 }
 
 # read in the data----------------------------
+for_shrinkage_plot <- read_rds(here("out","for_shrinkage_plot.rds"))
 mod_shares <-  read_rds(here("out","modified","shares.rds")) #forecast shares, overwritten on each save
 bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus 6 years.
 regions <- unique(mod_shares$bc_region)
@@ -368,6 +372,7 @@ observeEvent(input$save, {
     select(-pre_mod_share, -multiplier)|>
     rename(pre_mod_share=post_mod_share)|>
     write_rds(here("out","modified", "shares.rds"))
+  
   tibble("margin"=input$margin, #append this change to the change log.
          "item"=input$item, 
          "shift"=input$shift, 
@@ -385,25 +390,39 @@ observeEvent(input$save, {
 })
 ```
 
-# Description
+# Why?
 
-### Intro
+- This project grew out of a desire to see how close I could get to the demand side of the Stokes forecast with 5 minutes of processor time and 15 minutes of adjusting the driver industries vs. 5 months of back and forth with Stokes.
+
+- I have made no attempt to model the supply side...
+
+#### Correlation between models:
+
+- Employment:
+    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .97
+    -  When aggregated to occupation (512) the correlation is $\approx$ .99
+ 
+- Replacement Demand:
+    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .97
+    -  When aggregated to occupation (512) the correlation is $\approx$ .94
+    
+- Expansion Demand:
+    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .88
+    -  When aggregated to occupation (512) the correlation is $\approx$ .83
+
+- It appears that the greatest discrepancy between models is in the occupational growth rates... (which we can investigate using the compare forecasts app.) 
+
+# Baseline
+
+### Baseline Proportions
 
 -   For the BC LMO we are constrained by the Finance forecast.
 
 -   Given this constraint, in effect we are forecasting proportions of BC employment.
 
--   There are 4 dimensions that we care about: Time, Region, Industry and Occupation.
-
--   At a given point in time, one can visualize the remaining 3 dimensions as a cube, with sides representing the 7 regions, 63 industries, and 512 occupations, and cells representing the proportion of BC employment for that combination of region, industry and occupation.
-
--   Note that these 11 cubes (one for each year) are extremely sparse: there are not many combinations of region, industry and occupation that have positive counts.
-
--   Our forecasting technique needs to overcome the limitations associated with the sparsity of the data.
-
 -   Using census 2021 and monthly LFS data from the years 2018:2024, we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
 
--   Specifically, we create a weighted average of Census and LFS proportions, where the weight on Census is 0.81 and the weight on LFS is 0.19.
+-   Specifically, we create a weighted average of Census and LFS proportions, where the weight on Census is 0.83 and the weight on LFS is 0.17.
 
 -   These weights reflect the effective sample size (number of workers covered) of the two sources:
 
@@ -412,30 +431,114 @@ observeEvent(input$save, {
 kable(
   tibble(
     Source = c("LFS (7 years)", "Census (2021)"),
-    `Effective N (workers)` = c("~1.1 million", "~4.8 million")
+    `Effective N (workers)` = c("~1 million", "~4.8 million")
   ),
   caption = "Effective sample size of LFS and Census data"
 )|>
   kable_styling(full_width = FALSE, position = "left")
 ```
 
+#### Where did these numbers come from?
 
--   We then aggregate the LFS data from 2000 to 2024, creating 582 slices of BC (7 regions, 63 industries and 512 occupations), to each of which we apply the linear model:
+##### Census
 
-$$ log(Employment+1) \sim time+\epsilon$$
+- In 2021 there were 14,978,940 occupied private households in Canada, of which 25% received the long form census: 3,744,735 households.
+- The total number of employed in Canada was 19,166,110.  If we divide the total employed by the number of households we get 1.28 workers per household.
+- Thus the 2021 Census collected labour market information on approximately 4.8 million workers.
 
--   The smaller the slice the more noisy it is.
--   Trust in the regression estimates should depend on how noisy the series is.  
--   Empirical Bayes is a method that shrinks the slope estimates towards the slope of BC as a whole.
--   The degree of shrinkage depends on the variance of the slope estimate (standard error squared), relative to the variance of the slope deviations (difference between each slice's slope estimate and BC's slope estimate).  
--   We then apply these shrunken growth factors to adjust the baseline proportions over the forecast horizon.
+#### Labour Force Survey
+
+-   Survey is sent to 56,000 households each month, 1/6th of which are unique (rotating panel).
+-   Unique households over 84 months ≈ (56,000/6)*84 = 784,000 households.
+-   Given 1.28 workers per household, LFS surveyed approximately 1 million distinct workers over 7 years.
+
+
+# Change 
+
+Column 
+-------------------------------------
+
+### Change in Proportions 
+
+-   Obviously the composition of the BC labour market is not fixed: Next we describe how the baseline proportions are modified to evolve over time.  
+-   We begin by aggregating the LFS data from 2000 to 2024, creating 582 slices of BC (the 7 regions, 63 industries and 512 occupations).
+-   For each slice ($s$) of data we fit a linear model:
+
+$$ log(Employment_s+1) \sim year+\epsilon$$
+
+-  As a result, we end up with 582 slope coefficients: $\hat{\beta_s}$ (and their standard errors.) 
+-  We do the same for BC as a whole, yielding $\hat{\beta}_{BC}$.
+-  For a given dimension (e.g. Region), Empirical Bayes shrinks each slice's slope coefficient towards $\hat{\beta}_{BC}$. 
+-  The weight on $\hat{\beta}_s$ depend on its variance $(SE(\hat{\beta}_s))^2$ relative to the variance of the slice deviations: $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$
+
+
+$$w_{\hat{\beta}_s}=\frac{\tau^2}{\tau^2 + (SE(\hat{\beta}_s))^2}$$
+
+-   We then apply these weighted average growth factors to adjust the baseline proportions over the forecast horizon.
 -   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
 -   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
 -   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
 -   This is in contrast to the baseline *levels*, where the sparsity alone indicates strong dependency between region, industry and occupation.
 -   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
-# BC timeplot
+Column {.tabset}
+-------------------------------------
+
+### Weight on $\hat{\beta_s}$
+
+```{r}
+var <- seq(0.01,1,.01)
+tau2 <- var
+
+tbbl <- crossing(var, tau2)|>
+  mutate(weight=tau2/(var+tau2))
+
+ggplot(tbbl, aes(var, tau2, fill=weight))+
+  geom_tile()+
+  scale_fill_viridis_c(na.value = "white")+
+  theme_minimal()+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())+
+  labs(x=expression(SE(hat(beta))^2),
+    y=expression(tau^2),
+    fill=expression(omega[hat(beta)[s]]))
+```
+
+### $\hat{\beta}_s$ vs Shrunken slope (NOCs)
+
+```{r}
+bc_slope <- for_shrinkage_plot$bc_slope[1]
+
+plt <- ggplot(for_shrinkage_plot, aes(slope, shrunk_slope, colour=size, label=noc_5))+
+  geom_abline(slope=1, intercept = 0, colour="white", lwd=3)+
+  geom_vline(xintercept = bc_slope, colour="white", lwd=3)+
+  geom_hline(yintercept = bc_slope, colour="white", lwd=3)+
+  geom_point()+
+  geom_rug()+
+  scale_colour_viridis_c(trans="log10", labels=scales::comma)+
+  labs(x="Original Slope",
+       y="Shrunken Slope",
+       colour="Employment")+
+  xlim(-.25,.2)+
+  ylim(-.25,.2)
+
+
+plotly::ggplotly(plt)%>%
+  layout(
+    autosize = FALSE,
+    width = 600,
+    height = 500,
+    xaxis = list(scaleanchor = "y"),
+    yaxis = list(scaleanchor = "x"),
+    legend = list(orientation = "h",
+                  x = 0.5, xanchor = "center",
+                  y = -0.15)
+  )
+```
+
+# BC
+
+### BC time plot
 
 ```{r}
 plotly::renderPlotly({
@@ -461,9 +564,9 @@ ggplotly(plt, tooltip = "text")
 })
 ```
 
-# Region timeplots
+# Region
 
-### Regional Employment
+### Regional time plot
 
 ```{r, fig.retina=2}
 renderPlotly({
@@ -478,9 +581,9 @@ renderPlotly({
 })
 ```
 
-# Industry timeplots
+# Industry
 
-### Industry Employment
+### Industry time plot
 
 ```{r, fig.retina=2}
 renderPlotly({
@@ -495,7 +598,7 @@ renderPlotly({
 })
 ```
 
-# Occupation timeplots
+# Occupation
 
 ## Row {.tabset}
 
@@ -674,17 +777,19 @@ renderPlotly({
 })
 ```
 
-# An example
+# Example
 
-##
+###
 
 -  Suppose that we want to increase the proportion of employment in region 2.
 -  Every cell on level 2 of the cube would increase by the same proportion, maintaining the relative noc-naics composition within that region.
 -  Every cell not on level 2 would diminish to compensate, again maintaining the relative noc-naics composition within those regions.
 -  The same holds true for manipulating either an industry or occupation (vertical slices): every cell in that slice of the cube would increase by the same proportion, and every cell not in the slice would diminish to compensate, again maintaining the relative composition of the remaining two dimensions.
 
+###
 
-##
 
 <img src="Screenshot from 2025-06-09 08-46-31.png" width="100%" />
+
+
 

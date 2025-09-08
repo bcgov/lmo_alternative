@@ -10,10 +10,10 @@ library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
 #constants---------------------
-census_weight <- 0.81356 #long form 2021 census covered 4.8M workers, 7 years of LFS covered 1.1M (distinct) workers.
+census_weight <- 0.827586207 #long form 2021 census covered 4.8M workers, 7 years of LFS covered 1M (distinct) workers.
 base_years <- c(2018:2024) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
 base_plus <- 4:14 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
-
+budget_weight <- .62 #our forecast grows at a weighted average of the historic growth and the budget growth rate.
 #functions-----------------------
 
 est_growth <- function(tbbl) {
@@ -22,7 +22,7 @@ est_growth <- function(tbbl) {
     tidy()|>
     filter(term=="year")
   data=tibble(year=(max_year+1):(max_year+11))
-  tibble(slope=year_term$estimate, var=year_term$std.error^2, data=list(data))
+  tibble(slope=year_term$estimate, var=year_term$std.error^2, forecast=list(data))
 }
 
 exponentiate <- function(tbbl, growth_factor){
@@ -37,6 +37,12 @@ agg_and_save <- function(tbbl, var1, var2=NULL){
     mutate(series="historic")|>
     write_rds(here("out",paste0("historic_",as.character(substitute(var1)),".rds")))
 }
+
+get_size <- function(tbbl){
+  mean(tbbl$employment)
+}
+
+
 #read in mapping files----------------------
 mapping <- read_excel(here("data", "mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
   select(naics_5, lmo_detailed_industry, lmo_ind_code)
@@ -141,9 +147,10 @@ bc_slope <- lm(log(employment)~year, data=bc)|>
   pull(estimate)
 
 bc_growth_factor <- exp(bc_slope)
+our_forecast_growth_factor=(1-budget_weight)*bc_growth_factor+budget_weight*(1+budget$cagr[[1]])
 
 our_forecast <- tibble(year=(max(budget$year)+1):(max(budget$year)+6))|>
-  mutate(employment=tail(budget$employment, n=1)*bc_growth_factor^(year-max(budget$year)),
+  mutate(employment=tail(budget$employment, n=1)*our_forecast_growth_factor^(year-max(budget$year)),
          series="our forecast",
          cagr=NA_real_ #user will be able to alter slope, so delay cagr calculation
   )
@@ -175,23 +182,22 @@ regional_factor <- lfs|>
   group_by(year, bc_region)|>
   summarize(employment=sum(employment))|>
   group_by(bc_region)|>
-  nest()|>#changes below
+  nest()|>
   mutate(est_growth=map(data, est_growth))|>
   select(-data)|>
   unnest(est_growth)|>
   ungroup()|>
   mutate(bc_slope=bc_slope,
          tau2=var(slope-bc_slope),
-         weight=(tau2 / (tau2 + var)),
+         weight=tau2 / (tau2 + var),
          shrunk_slope = weight * slope + (1 - weight) * bc_slope,
          growth_factor=exp(shrunk_slope)
   )|>
-  select(bc_region, growth_factor, data)|>
-  mutate(data=map2(data, growth_factor, exponentiate))|>
+  select(bc_region, growth_factor, forecast)|>
+  mutate(forecast=map2(forecast, growth_factor, exponentiate))|>
   select(-growth_factor)|>
-  unnest(data)|>
+  unnest(forecast)|>
   rename(regional_factor=multiplier)
-
 
 #INDUSTRY GROWTH FACTORS---------------
 industry_factor <- lfs|>
@@ -203,8 +209,8 @@ industry_factor <- lfs|>
   select(-bc_region, -noc_5)|>
   nest()|>
   mutate(est_growth=map(data, est_growth))|>
-  select(-data)|>
   unnest(est_growth)|>
+  select(-data)|>
   ungroup()|>
   mutate(bc_slope=bc_slope,
          tau2=var(slope-bc_slope),
@@ -212,15 +218,14 @@ industry_factor <- lfs|>
          shrunk_slope = weight * slope + (1 - weight) * bc_slope,
          growth_factor=exp(shrunk_slope)
   )|>
-  select(contains("lmo"), growth_factor, data)|>
-  mutate(data=map2(data, growth_factor, exponentiate))|>
+  select(contains("lmo"), growth_factor, forecast)|>
+  mutate(forecast=map2(forecast, growth_factor, exponentiate))|>
   select(-growth_factor)|>
-  unnest(data)|>
+  unnest(forecast)|>
   rename(industry_factor=multiplier)
 
-
 #OCCUPATION GROWTH FACTORS---------------------------------
-occupation_factor <- lfs|>
+for_shrinkage_plot <- lfs|>
   filter(is.na(bc_region),
          !is.na(noc_5),
          lmo_detailed_industry=="Total, All Industries"
@@ -232,7 +237,9 @@ occupation_factor <- lfs|>
   tibble()|>
   group_by(noc_5)|>
   nest()|>
-  mutate(est_growth=map(data, est_growth))|>
+  mutate(est_growth=map(data, est_growth),
+         size=map_dbl(data, get_size)
+         )|>
   select(-data)|>
   unnest(est_growth)|>
   ungroup()|>
@@ -241,11 +248,17 @@ occupation_factor <- lfs|>
          weight=(tau2 / (tau2 + var)),
          shrunk_slope = weight * slope + (1 - weight) * bc_slope,
          growth_factor=exp(shrunk_slope)
-  )|>
-  select(noc_5, growth_factor, data)|>
-  mutate(data=map2(data, growth_factor, exponentiate))|>
+  )
+
+for_shrinkage_plot|>
+  select(noc_5, size, contains("slope"))|>
+  write_rds(here("out", "for_shrinkage_plot.rds"))
+
+occupation_factor <- for_shrinkage_plot|>
+  select(noc_5, growth_factor, forecast)|>
+  mutate(forecast=map2(forecast, growth_factor, exponentiate))|>
   select(-growth_factor)|>
-  unnest(data)|>
+  unnest(forecast)|>
   rename(occupation_factor=multiplier)
 
 # LFS forecast shares --------------------------
