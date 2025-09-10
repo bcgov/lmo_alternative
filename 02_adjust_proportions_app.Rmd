@@ -478,9 +478,9 @@ $$ log(Employment+1) \sim year+\epsilon$$
 -  We slice BC into 7 regions, 63 industries and 512 occupations: 582 slices of BC's labour market.
 -  We fit the above model to each slice, yielding 582 slope coefficients $\hat{\beta_s}$, and their standard errors $SE(\hat{\beta}_s)$.
 -  The question is how convincing is each slice's slope estimate? i.e. How much should we update our prior belief?
--  Two bits of information are relevant to belief updating: 
-    1) $SE(\hat{\beta}_s)$ indicates the precision of the estimate, aka the amount of noise around the slice's trend. 
-    2) $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$ is the variance of the slope deviations from the prior: an indication of how much variation there is *between* the slices in a given dimension (e.g. Regions)
+-  Two things determine the extent to which we update our beliefs: 
+    1) $(SE(\hat{\beta}_s))^2$, a measure of the noise around the trend for a given slice.  
+    2) $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$, a measure of how much slope variation there is *between* the slices.
 -  If a slice's slope is estimated precisely and there is a lot of variability between slices then we basically ignore the prior (yellow areas in heatmap to right).
 -  If a slice's slope is estimated imprecisely and there is not much variability between slices then we weight the prior heavily (purple areas in heatmap to right).
 -  Specifically, we create a weighted average of the prior and the slice's slope estimate, where the weight on $\hat{\beta}_s$ is
