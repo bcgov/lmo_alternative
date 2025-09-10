@@ -16,6 +16,7 @@ library(plotly)
 library(conflicted)
 library(janitor)
 library(readxl)
+library(rlang)
 conflicts_prefer(dplyr::filter)
 
 #functions------------------------------
@@ -81,31 +82,82 @@ rich_vs_stokes2 <- function(tbbl, var1, var2, cor){
   plotly::ggplotly(plt, tooltip="text")
 }
 
-find_corr_outliers <- function(tbbl, rich, stokes, n) {#note that ties are dropped.
-  fmla <- reformulate(deparse(substitute(stokes)), deparse(substitute(rich)))
-  fit <- lm(fmla, data = tbbl)
-  cooks <- cooks.distance(fit)
-  distance <- log(cooks[order(cooks, decreasing = TRUE)])
-  bind_cols(tbbl[order(cooks, decreasing = TRUE), ], log_distance=distance)
+fast_loocor <- function(x, y) {
+  n <- length(x)
+  stopifnot(length(y) == n)
+  
+  # Precompute totals
+  sumx  <- sum(x);  sumy  <- sum(y)
+  sumx2 <- sum(x^2); sumy2 <- sum(y^2)
+  sumxy <- sum(x * y)
+  
+  # Preallocate
+  cors <- numeric(n)
+  
+  for (i in seq_len(n)) {
+    nx <- n - 1
+    sx  <- sumx  - x[i]
+    sy  <- sumy  - y[i]
+    sx2 <- sumx2 - x[i]^2
+    sy2 <- sumy2 - y[i]^2
+    sxy <- sumxy - x[i] * y[i]
+    
+    # Means
+    mx <- sx / nx
+    my <- sy / nx
+    
+    # Sums of squares (centered)
+    Sxx <- sx2 - nx * mx^2
+    Syy <- sy2 - nx * my^2
+    Sxy <- sxy - nx * mx * my
+    
+    cors[i] <- Sxy / sqrt(Sxx * Syy)
+  }
+  cors
 }
+
+
+loocor_df <- function(data, xcol, ycol) {
+  # allow bare column names
+  xcol <- ensym(xcol)
+  ycol <- ensym(ycol)
+  
+  x <- data[[as_string(xcol)]]
+  y <- data[[as_string(ycol)]]
+  
+  # full correlation
+  r_full <- cor(x, y)
+  
+  # fast leave-one-out correlations
+  cors <- fast_loocor(x, y)  
+  delta <- cors - r_full
+  
+  # return original df with delta
+  data %>%
+    mutate(r_full=r_full,
+           delta = delta,
+           cor_without = cors)|>
+    arrange(desc(delta))
+}
+
 
 #demand plot----------------------------------------------
 demand_plot <- function(tbbl, rich, stokes, title){
   plt <- tbbl|>
     ggplot(mapping=aes(x={{  rich  }}, 
                        y={{  stokes  }},
-                       fill=log_distance, 
+                       fill=delta, 
                        text=paste0("Region: ", bc_region,
                                    "\n Industry: ", lmo_detailed_industry,
                                    "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
                                    "\n Stokes: ", scales::comma({{  stokes  }}, accuracy = 1))))+
   geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
-  geom_point(shape = 21, size=1.5, colour = "black", stroke=.25)+  
+  geom_point(shape = 21, size=1.5, colour = "black", stroke=.25)+
   scale_fill_viridis_c()+
-  scale_x_continuous(trans="log10", labels=scales::comma)+
-  scale_y_continuous(trans="log10", labels=scales::comma)+
+  scale_x_continuous(labels=scales::comma)+
+  scale_y_continuous(labels=scales::comma)+
   labs(title=title,
-       fill="Log(Cook's Distance)")
+       fill = "LOO \u0394 r")
 
 plotly::ggplotly(plt, tooltip="text")
 }
@@ -114,7 +166,7 @@ demand_plot2 <- function(tbbl, rich, stokes, title){
   plt <- tbbl|>
     ggplot(mapping=aes(x={{  rich  }}, 
                        y={{  stokes  }},
-                       fill=log_distance,
+                       fill=delta,
                        text=paste0("NOC: ", noc_5,
                                    "\n Description: ", description,
                                    "\n Rich: ", scales::comma({{  rich  }}, accuracy = 1),
@@ -122,10 +174,10 @@ demand_plot2 <- function(tbbl, rich, stokes, title){
   geom_abline(slope=1, intercept=0, linewidth=2, color="white") +
   geom_point(shape = 21, size=1.5, colour = "black", stroke=.25)+    
   scale_fill_viridis_c()+
-  scale_x_continuous(trans="log10", labels=scales::comma)+
-  scale_y_continuous(trans="log10", labels=scales::comma)+
-  labs(title=title,
-       fill="Log(Cook's Distance)")
+  scale_x_continuous(labels=scales::comma)+
+  scale_y_continuous(labels=scales::comma)+
+  labs(title=title, 
+       fill = "LOO \u0394 r")
 
 plotly::ggplotly(plt, tooltip="text")
 }
@@ -482,7 +534,7 @@ plotly::ggplotly(plt, tooltip="text")
 })
 ```   
  
-Demand
+Demand: Coloured by Leave One Out $\Delta$ correlation
 =====================================
 
 Column {data-width=500}
@@ -499,7 +551,8 @@ title <- jo_region_industry|>
   row_to_string()
 
 jo_region_industry|>
-  find_corr_outliers(richs_expansion, stokes_expansion)|>
+  ungroup()|>
+  loocor_df(richs_expansion, stokes_expansion)|>
   demand_plot(richs_expansion, stokes_expansion, title)
 ```
     
@@ -515,7 +568,8 @@ title <- jo_region_industry|>
   row_to_string()
 
 jo_region_industry|>
-  find_corr_outliers(richs_replacement, stokes_replacement)|>
+  ungroup()|>
+  loocor_df(richs_replacement, stokes_replacement)|>
   demand_plot(richs_replacement, stokes_replacement, title)
 ```
  
@@ -533,7 +587,8 @@ title <- jo_occupation|>
   row_to_string()
 
 jo_occupation|>
-  find_corr_outliers(richs_expansion, stokes_expansion)|>
+  ungroup()|>
+  loocor_df(richs_expansion, stokes_expansion)|>#view()
   demand_plot2(richs_expansion, stokes_expansion, title)
 ```
 
@@ -548,7 +603,8 @@ title <- jo_occupation|>
   row_to_string()
 
 jo_occupation|>
-  find_corr_outliers(richs_replacement, stokes_replacement)|>
+  ungroup()|>
+  loocor_df(richs_replacement, stokes_replacement)|>
   demand_plot2(richs_replacement, stokes_replacement, title)
 ```
 
