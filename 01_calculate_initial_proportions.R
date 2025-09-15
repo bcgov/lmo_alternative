@@ -16,7 +16,7 @@ base_plus <- 4:14 #base year 2021, so forecast starts some years later.(need to 
 budget_weight <- .62 #our forecast grows at a weighted average of the historic growth and the budget growth rate.
 #functions-----------------------
 
-est_growth <- function(tbbl) {
+regress <- function(tbbl) {
   max_year <- max(tbbl$year)
   year_term <- lm(log(employment+1) ~ year, data=tbbl)|>
     tidy()|>
@@ -183,9 +183,9 @@ regional_factor <- lfs|>
   summarize(employment=sum(employment))|>
   group_by(bc_region)|>
   nest()|>
-  mutate(est_growth=map(data, est_growth))|>
+  mutate(regress=map(data, regress))|>
   select(-data)|>
-  unnest(est_growth)|>
+  unnest(regress)|>
   ungroup()|>
   mutate(bc_slope=bc_slope,
          tau2=var(slope-bc_slope),
@@ -208,8 +208,8 @@ industry_factor <- lfs|>
   group_by(lmo_ind_code, lmo_detailed_industry)|>
   select(-bc_region, -noc_5)|>
   nest()|>
-  mutate(est_growth=map(data, est_growth))|>
-  unnest(est_growth)|>
+  mutate(regress=map(data, regress))|>
+  unnest(regress)|>
   select(-data)|>
   ungroup()|>
   mutate(bc_slope=bc_slope,
@@ -237,11 +237,11 @@ for_shrinkage_plot <- lfs|>
   tibble()|>
   group_by(noc_5)|>
   nest()|>
-  mutate(est_growth=map(data, est_growth),
+  mutate(regress=map(data, regress),
          size=map_dbl(data, get_size)
          )|>
   select(-data)|>
-  unnest(est_growth)|>
+  unnest(regress)|>
   ungroup()|>
   mutate(bc_slope=bc_slope,
          tau2=var(slope-bc_slope),
