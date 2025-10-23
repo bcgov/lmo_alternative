@@ -1,0 +1,324 @@
+---
+title: "Supply Model"
+author: "Richard Martin"
+execute:
+  message: FALSE   # suppress messages
+  warning: FALSE   # suppress warnings
+format:
+  html:
+    self-contained: TRUE
+    code-fold: TRUE
+    page-layout: full
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(vroom)
+library(here)
+library(janitor)
+library(fpp3)
+library(ggalluvial)
+library(plotly)
+library(conflicted)
+conflicts_prefer(plotly::layout)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::select)
+```
+
+## Constants:
+
+```{r}
+forecast_horizon <- 10
+forecast_years <- (year(today())):(year(today())+forecast_horizon)
+entry_age <- 17
+```
+
+Our forecast horizon is ten years, so the forecast years are `r paste(year(today()), (year(today())+forecast_horizon), sep=" to ") `.  We assume that young British Columbians start work at age `r entry_age`.
+
+
+## Functions:
+
+```{r}
+noc_props <- function(file_name){
+  vroom(here("data",
+             "supply_side",
+             "noc_counts",
+             file_name))|>
+    rename(noc_desc=contains("NOC"))|>
+    mutate(noc=str_sub(noc_desc, 1, 5),
+           desc=str_sub(noc_desc, 7),
+           prop=VALUE/sum(VALUE, na.rm=TRUE)
+    )|>
+    select(noc, desc, prop)|>
+    arrange(desc(prop))
+}
+```
+Function `noc_props` takes a single arguement `file_name`, loads the file,
+splits long noc description into separate columns for the 5 digit code and 
+description, and calculates the proportional breakdown of employment by 5 digit 
+noc codes. 
+
+```{r}
+part_rates <- function(file_name){
+  tbbl <- vroom(here("data",
+             "supply_side",
+             "part_rates",
+             file_name))|>
+    clean_names()
+
+  switch(file_name,
+         "14-10-0017-01.csv" = get_entrant_part_rate(tbbl),
+         "98-10-0446-01.csv" = get_immigrant_part_rate(tbbl),
+         "14-10-0327-01.csv" = get_canada_part_rate(tbbl),
+         stop("Unknown file name") 
+  )
+}
+```
+
+Function `part_rates`  takes a single arguement `file_name`, loads the file,
+and cleans the variable names. How the participation rate is calculated differs
+by the structure of the `file_name`, so it calls different functions for each file.
+
+```{r}
+get_entrant_part_rate <- function(tbbl){
+  tbbl|>
+    select(ref_date, labour_force_characteristics, value)|>
+    pivot_wider(names_from = labour_force_characteristics, values_from = value)|>
+    clean_names()|>
+    mutate(ref_date=year(ym(ref_date)))|> #convert ref_date to its year
+    group_by(ref_date)|>
+    summarize(population=sum(population), #aggregate of population for each year
+              labour_force=sum(labour_force) #aggregate of labour force for each year
+              )|>
+    mutate(part_rate=labour_force/population)|>
+    select(ref_date, part_rate)|>
+    as_tsibble(index=ref_date)|>
+    model(ets=ETS(part_rate),
+          tslm=TSLM(part_rate~trend())
+          )|>
+    forecast(h = forecast_horizon)|>
+    as_tibble()|>
+    group_by(ref_date)|>
+    summarize(part_rate=mean(.mean))
+}
+```
+
+```{r}
+get_immigrant_part_rate <- function(tbbl){
+  tbbl|>
+    select(lf_status=contains("labour_force_status"),
+           immigrant_class=contains("immigrant_status"),
+           age=contains("age"),
+           value)|>
+    group_by(lf_status, immigrant_class)|>
+    summarize(value=sum(value))|>
+    pivot_wider(id_cols = immigrant_class, names_from = lf_status, values_from = value)|>
+    clean_names()|>
+    mutate(immigrant_part_rate=(unemployed+employed)/(unemployed+employed+not_in_the_labour_force))|>
+    select(immigrant_class, immigrant_part_rate)
+}
+```
+
+```{r}
+get_canada_part_rate <- function(tbbl){
+  tbbl|>
+    select(ref_date, value)|>
+    as_tsibble(index=ref_date)|>
+    model(ets=ETS(value~trend()),
+          tslm=TSLM(value~trend()))|>
+    forecast(h=forecast_horizon+1)|>
+    as_tibble()|>
+    group_by(ref_date)|>
+    summarize(canada_part_rate=mean(.mean)/100)
+}
+```
+
+For inter-provincial migrants we assume the same participation rate as Canada as
+a whole.  We use annual LFS data, and forecast the participation rate with
+an ensemble of ETS and TSLM.
+
+
+```{r}
+alluvium_prep <- function(noc_digit, names){
+  new_entrants_ten <- new_entrants|>
+    mutate(noc=str_sub(noc, noc_digit, noc_digit))|>
+    group_by(noc)|>
+    summarize(new_entrants=sum(new_entrants))
+
+  immigrants_ten <- immigrants|>
+    mutate(noc=str_sub(noc, noc_digit, noc_digit))|>
+    group_by(noc)|>
+    summarize(immigrants=sum(immigrants))
+
+  interprovincial_ten <- interprovincial|>
+    mutate(noc=str_sub(noc, noc_digit, noc_digit))|>
+    group_by(noc)|>
+    summarize(interprovincial=sum(interprovincial))
+
+  tbbl <- full_join(new_entrants_ten, immigrants_ten)|>
+    full_join(interprovincial_ten)|>
+    pivot_longer(cols=c("immigrants", "new_entrants", "interprovincial"), names_to = "stream")|>
+    left_join(names)|>
+    mutate(desc=paste(noc, desc, sep=": "), 
+           desc=str_trunc(desc, 45))
+}
+alluvium_plot <- function(tbbl){
+  ggplot(data = tbbl,
+       aes(axis1 = stream, axis2 = desc, y = value)) +
+  geom_alluvium(aes(fill = stream)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum)),
+            size=4)+
+  labs(fill="Sources of new workers")+
+  theme_void()
+}
+```
+
+
+## Noc Props:
+
+```{r, message=FALSE}
+entrant_noc_props <- noc_props("98-10-0593-01.csv")
+immigrant_noc_props <- noc_props("98-10-0316-01.csv")
+canada_noc_props <- noc_props("98-10-0449-01.csv")
+```
+
+## Participation rates:
+
+```{r}
+entrant_part_rate <- part_rates("14-10-0017-01.csv")
+immigrant_part_rate <- part_rates("98-10-0446-01.csv")
+
+immigrant_part_rate$immigrant_class[1] <- "Permanent residents"
+pr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Permanent residents"]
+npr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Non-permanent residents"]
+
+canada_part_rate <-part_rates("14-10-0327-01.csv")
+```
+
+## Streams of participants:
+
+```{r}
+entrants_part <- vroom(here("data",
+                        "supply_side",
+                        "streams_of_people",
+                        "bcstats_shinyapps_io_popApp.csv"),
+                   skip=6)|>
+  clean_names()|>
+  filter(age==entry_age,
+         year %in% forecast_years)|>
+  rename(ref_date=year)|>
+  filter(ref_date>min(ref_date))|>
+  full_join(entrant_part_rate)|>
+  mutate(new_entrants=pop*part_rate)|>
+  select(ref_date, new_entrants)
+
+#' Statistics Canada Table 17-10-0014-01
+#' To get new permanent resident's contribution to supply, we subtract net
+#' emigration from new permanent residents ("immigrants"), and then apply the
+#' permanent resident participation rate. Similarly, we apply the non-permanent
+#' part rate to net non-permanent residents, and then add the two streams
+#' together.  Next we forecast this stream of immigrant_participants using an '
+#' ensemble forecast of ETS and TSLM. 
+
+immigrants_part <- vroom(here("data",
+                              "supply_side",
+                              "streams_of_people",
+                              "17-10-0014-01.csv"))|>
+  clean_names()|>
+  select(ref_date, type_of_migrant, value)|>
+  pivot_wider(id_cols = ref_date, names_from = type_of_migrant, values_from = value)|>
+  clean_names()|>
+  mutate(permanent=(immigrants-net_emigration)*pr_part_rate,
+         non_permanent=net_non_permanent_residents*npr_part_rate,
+         immigrant_participants=permanent+non_permanent,
+         ref_date=as.numeric(str_sub(ref_date, 1, 4))+1
+  )|>
+  select(ref_date, immigrant_participants)|>
+  as_tsibble(index=ref_date)|>
+  model(ets=ETS(immigrant_participants),
+        tslm=TSLM(immigrant_participants~trend()))|>
+  forecast(h=forecast_horizon)|>
+  as_tibble()|>
+  group_by(ref_date)|>
+  summarize(immigrant_participants=mean(.mean))
+
+#' Create a forecast of net inter-provincial migration, then apply Canada's
+#' forecast participation rates. Non-permanent residents, outflow refers to the
+#'  number of work and study permit holders leaving Canada, along with their 
+#'  family members who are not Canadian citizens, landed immigrants
+#'   (permanent residents) or non-permanent residents themselves. This also 
+#'   includes permit holders and asylum claimants, protected persons and related 
+#'   groups staying in Canada who have been granted permanent resident status. 
+#'   In this case, these persons will be added to the immigrant component. 
+#'   Asylum claimants and related groups who have been deported are also counted as outflows.
+
+inter_prov_part <- vroom(here("data",
+                                   "supply_side",
+                                   "streams_of_people",
+                                   "17-10-0015-01.csv"))|>
+  clean_names()|>
+  mutate(ref_date=as.numeric(str_sub(ref_date, 1, 4))+1)|>
+  select(ref_date, value)|>
+  as_tsibble(index=ref_date)|>
+  model(ets=ETS(value),
+        tslm=TSLM(value))|> #looks like random noise
+  forecast(h = forecast_horizon)|>
+  as_tibble()|>
+  group_by(ref_date)|>
+  summarize(interprovincial_people=mean(.mean))|>
+  inner_join(canada_part_rate, by = join_by(ref_date))|>
+  mutate(net_new_interprovincial=interprovincial_people*canada_part_rate)|>
+  select(ref_date, net_new_interprovincial)
+```
+
+## Assign new workers to NOCs:
+
+```{r}
+new_entrants <- crossing(entrants_part, entrant_noc_props)|>
+  mutate(new_entrants=new_entrants*prop)|>
+  select(-prop, -desc)
+
+immigrants <- crossing(immigrants_part, immigrant_noc_props)|>
+  mutate(immigrants=immigrant_participants*prop)|>
+  select(-immigrant_participants, -prop, -desc)
+
+interprovincial <- crossing(inter_prov_part, canada_noc_props)|>
+  mutate(interprovincial=net_new_interprovincial*prop)|>
+  select(ref_date, noc, desc, interprovincial)
+```
+
+
+```{r}
+broad_names <- vroom(here("data", 
+                        "supply_side", 
+                        "noc_descriptions",
+                        "noc_2021_version_1.0_-_classification_structure.csv"))|>
+  select(noc=contains("noc"),
+         desc=`Class title`,
+         level= contains("Hierarchical"))|>
+  filter(level=="Broad Category")|>
+  select(-level)|>
+  mutate(noc=as.character(noc))
+
+teer_names <- read_csv(here("data", 
+                            "supply_side", 
+                            "noc_descriptions",
+                            "teer_description_short.csv"))|>
+  transmute(noc=as.character(teer),
+            desc=data)
+
+by_teer <- alluvium_prep(2, teer_names)
+by_broad <- alluvium_prep(1, broad_names)
+```
+
+```{r, fig.retina=2, fig.width=16, fig.height=8, warning=FALSE}
+alluvium_plot(by_teer)
+```
+
+```{r, fig.retina=2, fig.width=16, fig.height=8,  warning=FALSE}
+alluvium_plot(by_broad)
+```
+
+
