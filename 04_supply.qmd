@@ -1,5 +1,5 @@
 ---
-title: "Supply Model"
+title: "Supply of new workers to BC"
 author: "Richard Martin"
 execute:
   message: FALSE   # suppress messages
@@ -19,26 +19,17 @@ library(janitor)
 library(fpp3)
 library(ggalluvial)
 library(plotly)
+library(kableExtra)
 library(conflicted)
 conflicts_prefer(plotly::layout)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::select)
-```
-
-## Constants:
-
-```{r}
+#constants-----------------------------
+options(scipen = 999)
 forecast_horizon <- 10
 forecast_years <- (year(today())):(year(today())+forecast_horizon)
 entry_age <- 17
-```
-
-Our forecast horizon is ten years, so the forecast years are `r paste(year(today()), (year(today())+forecast_horizon), sep=" to ") `.  We assume that young British Columbians start work at age `r entry_age`.
-
-
-## Functions:
-
-```{r}
+#functions--------------------------
 noc_props <- function(file_name){
   vroom(here("data",
              "supply_side",
@@ -52,13 +43,6 @@ noc_props <- function(file_name){
     select(noc, desc, prop)|>
     arrange(desc(prop))
 }
-```
-Function `noc_props` takes a single arguement `file_name`, loads the file,
-splits long noc description into separate columns for the 5 digit code and 
-description, and calculates the proportional breakdown of employment by 5 digit 
-noc codes. 
-
-```{r}
 part_rates <- function(file_name){
   tbbl <- vroom(here("data",
              "supply_side",
@@ -73,15 +57,8 @@ part_rates <- function(file_name){
          stop("Unknown file name") 
   )
 }
-```
-
-Function `part_rates`  takes a single arguement `file_name`, loads the file,
-and cleans the variable names. How the participation rate is calculated differs
-by the structure of the `file_name`, so it calls different functions for each file.
-
-```{r}
 get_entrant_part_rate <- function(tbbl){
-  tbbl|>
+  dat <- tbbl|>
     select(ref_date, labour_force_characteristics, value)|>
     pivot_wider(names_from = labour_force_characteristics, values_from = value)|>
     clean_names()|>
@@ -92,7 +69,9 @@ get_entrant_part_rate <- function(tbbl){
               )|>
     mutate(part_rate=labour_force/population)|>
     select(ref_date, part_rate)|>
-    as_tsibble(index=ref_date)|>
+    as_tsibble(index=ref_date)
+  
+  fcast <- dat|>
     model(ets=ETS(part_rate),
           tslm=TSLM(part_rate~trend())
           )|>
@@ -100,10 +79,13 @@ get_entrant_part_rate <- function(tbbl){
     as_tibble()|>
     group_by(ref_date)|>
     summarize(part_rate=mean(.mean))
+  
+  plt <- ggplot()+
+    geom_line(data=dat, mapping=aes(ref_date, part_rate))+
+    geom_line(data=fcast, mapping = aes(ref_date, part_rate), colour="blue")
+  print(plt)
+  return(fcast)
 }
-```
-
-```{r}
 get_immigrant_part_rate <- function(tbbl){
   tbbl|>
     select(lf_status=contains("labour_force_status"),
@@ -117,28 +99,27 @@ get_immigrant_part_rate <- function(tbbl){
     mutate(immigrant_part_rate=(unemployed+employed)/(unemployed+employed+not_in_the_labour_force))|>
     select(immigrant_class, immigrant_part_rate)
 }
-```
-
-```{r}
 get_canada_part_rate <- function(tbbl){
-  tbbl|>
+  dat <- tbbl|>
     select(ref_date, value)|>
-    as_tsibble(index=ref_date)|>
-    model(ets=ETS(value~trend()),
-          tslm=TSLM(value~trend()))|>
+    mutate(part_rate=value/100)|>
+    as_tsibble(index=ref_date)
+  
+  fcast <- dat|>
+    model(ets=ETS(part_rate~trend()),
+          tslm=TSLM(part_rate~trend()))|>
     forecast(h=forecast_horizon+1)|>
     as_tibble()|>
     group_by(ref_date)|>
-    summarize(canada_part_rate=mean(.mean)/100)
+    summarize(canada_part_rate=mean(.mean))
+  
+   plt <- ggplot()+
+    geom_line(data=dat, mapping=aes(ref_date, part_rate))+
+    geom_line(data=fcast, mapping = aes(ref_date, canada_part_rate), colour="blue")
+   print(plt)
+   return(fcast)
 }
-```
 
-For inter-provincial migrants we assume the same participation rate as Canada as
-a whole.  We use annual LFS data, and forecast the participation rate with
-an ensemble of ETS and TSLM.
-
-
-```{r}
 alluvium_prep <- function(noc_digit, names){
   new_entrants_ten <- new_entrants|>
     mutate(noc=str_sub(noc, noc_digit, noc_digit))|>
@@ -162,6 +143,7 @@ alluvium_prep <- function(noc_digit, names){
     mutate(desc=paste(noc, desc, sep=": "), 
            desc=str_trunc(desc, 45))
 }
+
 alluvium_plot <- function(tbbl){
   ggplot(data = tbbl,
        aes(axis1 = stream, axis2 = desc, y = value)) +
@@ -173,124 +155,35 @@ alluvium_plot <- function(tbbl){
   labs(fill="Sources of new workers")+
   theme_void()
 }
-```
+kernel_smooth <- function(tbbl){
+  inner_join(tbbl, kernel_weights)|>
+    mutate(entered=pop*`kernel weights`)|>
+    summarize(entered=sum(entered))|>
+    pull(entered)
+}
+my_dt <- function(tbbl) {
+  DT::datatable(tbbl,
+    filter = 'top',
+    extensions = "Buttons",
+    rownames = FALSE,
+    options = list(
+      columnDefs = list(list(className = "dt-center", targets = "_all")),
+      paging = TRUE,
+      scrollX = TRUE,
+      scrollY = TRUE,
+      searching = TRUE,
+      ordering = TRUE,
+      dom = "Btip",
+      buttons = list(
+        list(extend = "csv", filename = "supply"),
+        list(extend = "excel", filename = "supply")
+      ),
+      pageLength = 10
+    )
+  )
+}
 
-
-## Noc Props:
-
-```{r, message=FALSE}
-entrant_noc_props <- noc_props("98-10-0593-01.csv")
-immigrant_noc_props <- noc_props("98-10-0316-01.csv")
-canada_noc_props <- noc_props("98-10-0449-01.csv")
-```
-
-## Participation rates:
-
-```{r}
-entrant_part_rate <- part_rates("14-10-0017-01.csv")
-immigrant_part_rate <- part_rates("98-10-0446-01.csv")
-
-immigrant_part_rate$immigrant_class[1] <- "Permanent residents"
-pr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Permanent residents"]
-npr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Non-permanent residents"]
-
-canada_part_rate <-part_rates("14-10-0327-01.csv")
-```
-
-## Streams of participants:
-
-```{r}
-entrants_part <- vroom(here("data",
-                        "supply_side",
-                        "streams_of_people",
-                        "bcstats_shinyapps_io_popApp.csv"),
-                   skip=6)|>
-  clean_names()|>
-  filter(age==entry_age,
-         year %in% forecast_years)|>
-  rename(ref_date=year)|>
-  filter(ref_date>min(ref_date))|>
-  full_join(entrant_part_rate)|>
-  mutate(new_entrants=pop*part_rate)|>
-  select(ref_date, new_entrants)
-
-#' Statistics Canada Table 17-10-0014-01
-#' To get new permanent resident's contribution to supply, we subtract net
-#' emigration from new permanent residents ("immigrants"), and then apply the
-#' permanent resident participation rate. Similarly, we apply the non-permanent
-#' part rate to net non-permanent residents, and then add the two streams
-#' together.  Next we forecast this stream of immigrant_participants using an '
-#' ensemble forecast of ETS and TSLM. 
-
-immigrants_part <- vroom(here("data",
-                              "supply_side",
-                              "streams_of_people",
-                              "17-10-0014-01.csv"))|>
-  clean_names()|>
-  select(ref_date, type_of_migrant, value)|>
-  pivot_wider(id_cols = ref_date, names_from = type_of_migrant, values_from = value)|>
-  clean_names()|>
-  mutate(permanent=(immigrants-net_emigration)*pr_part_rate,
-         non_permanent=net_non_permanent_residents*npr_part_rate,
-         immigrant_participants=permanent+non_permanent,
-         ref_date=as.numeric(str_sub(ref_date, 1, 4))+1
-  )|>
-  select(ref_date, immigrant_participants)|>
-  as_tsibble(index=ref_date)|>
-  model(ets=ETS(immigrant_participants),
-        tslm=TSLM(immigrant_participants~trend()))|>
-  forecast(h=forecast_horizon)|>
-  as_tibble()|>
-  group_by(ref_date)|>
-  summarize(immigrant_participants=mean(.mean))
-
-#' Create a forecast of net inter-provincial migration, then apply Canada's
-#' forecast participation rates. Non-permanent residents, outflow refers to the
-#'  number of work and study permit holders leaving Canada, along with their 
-#'  family members who are not Canadian citizens, landed immigrants
-#'   (permanent residents) or non-permanent residents themselves. This also 
-#'   includes permit holders and asylum claimants, protected persons and related 
-#'   groups staying in Canada who have been granted permanent resident status. 
-#'   In this case, these persons will be added to the immigrant component. 
-#'   Asylum claimants and related groups who have been deported are also counted as outflows.
-
-inter_prov_part <- vroom(here("data",
-                                   "supply_side",
-                                   "streams_of_people",
-                                   "17-10-0015-01.csv"))|>
-  clean_names()|>
-  mutate(ref_date=as.numeric(str_sub(ref_date, 1, 4))+1)|>
-  select(ref_date, value)|>
-  as_tsibble(index=ref_date)|>
-  model(ets=ETS(value),
-        tslm=TSLM(value))|> #looks like random noise
-  forecast(h = forecast_horizon)|>
-  as_tibble()|>
-  group_by(ref_date)|>
-  summarize(interprovincial_people=mean(.mean))|>
-  inner_join(canada_part_rate, by = join_by(ref_date))|>
-  mutate(net_new_interprovincial=interprovincial_people*canada_part_rate)|>
-  select(ref_date, net_new_interprovincial)
-```
-
-## Assign new workers to NOCs:
-
-```{r}
-new_entrants <- crossing(entrants_part, entrant_noc_props)|>
-  mutate(new_entrants=new_entrants*prop)|>
-  select(-prop, -desc)
-
-immigrants <- crossing(immigrants_part, immigrant_noc_props)|>
-  mutate(immigrants=immigrant_participants*prop)|>
-  select(-immigrant_participants, -prop, -desc)
-
-interprovincial <- crossing(inter_prov_part, canada_noc_props)|>
-  mutate(interprovincial=net_new_interprovincial*prop)|>
-  select(ref_date, noc, desc, interprovincial)
-```
-
-
-```{r}
+# get names for NOC Broad Categories and TEER levels-----------------------
 broad_names <- vroom(here("data", 
                         "supply_side", 
                         "noc_descriptions",
@@ -308,7 +201,232 @@ teer_names <- read_csv(here("data",
                             "teer_description_short.csv"))|>
   transmute(noc=as.character(teer),
             desc=data)
+```
 
+## Streams of people
+
+There are three streams of people that augment British Columbia's supply of labour: the young, working age^[15-64 years old] people from other provinces/territories, and working age^[15-64 years old] people from other countries.  In this note we forecast each of these three streams of people, as well as their respective participation rates.  When the stream and participation rate are multiplied, we get a forecast of these supply additions.  Only by divine miracle would these supply additions exactly equal the sum of expansion and replacement demand: any difference is assumed to be balanced by changes in unemployment and participation in working age British Columbians.  
+
+#### The young
+
+For the young, we use demographic projections from <https://bcstats.shinyapps.io/popApp/>.  To avoid double counting working age^[15-64 years old] immigrants and inter-provincial migrants, we use BC population counts of individuals aged 10-14 from 6 years prior. i.e. those currently ages 16-20.  We apply a kernel smoother to model the transition from being young to being working age. i.e. in any given year, 10% of 16 year-olds become working age, 20% of 17 year-olds, etc.   
+
+```{r}
+kernel_weights <- tibble(age=16:20, `kernel weights`=c(.1,.2,.4,.2,.1))
+
+ggplot(kernel_weights, aes(age, `kernel weights`))+
+  geom_col(alpha=.5)
+```
+
+
+```{r}
+entrant_stream_data <- vroom(here("data",
+                        "supply_side",
+                        "streams_of_people",
+                        "bcstats_shinyapps_io_popApp.csv"),
+                   skip=6)|>
+  clean_names()|>
+  filter(age %in% 10:14)|>
+  mutate(year=year+6,
+         age=as.numeric(age)+6)|>
+  group_by(year)|>
+  nest()|>
+  mutate(smoothed=map_dbl(data, kernel_smooth))|>
+  unnest(cols = c(data))
+
+entrant_stream_data|>
+  filter(year<=max(forecast_years))|>
+  ggplot()+
+  geom_rect(aes(xmin = min(forecast_years), xmax = max(forecast_years), ymin = -Inf, ymax = Inf),
+            fill = "grey", colour="grey") +
+  geom_line(mapping=aes(year, pop, colour=age, group=age))+
+  geom_line(mapping=aes(year, smoothed), lwd=1.5)+
+  labs(title=paste("Kernel Smoothing of 6-year-shifted demographics (black line)"))+
+  scale_colour_viridis_c()+
+  theme_minimal()
+
+entrant_stream <- entrant_stream_data|>
+  filter(year %in% forecast_years)|>
+  rename(ref_date=year)|>
+  ungroup()|>
+  filter(ref_date>min(ref_date))|>
+  select(ref_date, smoothed)|>
+  distinct()
+```
+
+#### Net inter-provincial migrants
+
+For net inter-provincial migrants, we use data from Statistics Canada table [17-10-0015-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001501) where we filter geo=="British Columbia", gender=="Total-gender", migrants=="Net-migration", and age $\in$ [15,64]. We create an ensemble forecast using ETS and TSLM, plotted in blue below.
+
+```{r}
+inter_prov_data <- vroom(here("data",
+                                   "supply_side",
+                                   "streams_of_people",
+                                   "17-10-0015-01.csv"))|>
+  clean_names()|>
+  mutate(ref_date=as.numeric(str_sub(ref_date, 1, 4))+1)|>
+  select(ref_date, value)|>
+  as_tsibble(index=ref_date)
+
+inter_prov_stream <- inter_prov_data|>
+  model(ets=ETS(value),
+        tslm=TSLM(value~trend())
+        )|> 
+  forecast(h = forecast_horizon)|>
+  as_tibble()|>
+  group_by(ref_date)|>
+  summarize(interprovincial_people=mean(.mean))
+
+ggplot()+
+    geom_line(data=inter_prov_data, mapping=aes(ref_date, value))+
+    geom_line(data=inter_prov_stream, mapping = aes(ref_date, interprovincial_people), colour="blue")
+```
+
+#### Immigrants
+
+For immigrants, we use data from Statistics Canada table [17-10-0014-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001401) where we filter geo=="British Columbia", gender=="Total-gender", type of migrant $\in$ (Immigrants, Net emigration, net non-permanent residents), and age $\in$ [15,64].  We create a series *permanent_residents* which is the difference between immigrants and net_emigration. We create an ensemble forecast using ETS and TSLM, plotted in blue below.  **Could use 15% of levels plan for BC's share? but working age???**
+
+```{r}
+immigrant_data <- vroom(here("data",
+                              "supply_side",
+                              "streams_of_people",
+                              "17-10-0014-01.csv"))|>
+  clean_names()|>
+  select(ref_date, type_of_migrant, value)|>
+  pivot_wider(id_cols = ref_date, names_from = type_of_migrant, values_from = value)|>
+  clean_names()|>
+  mutate(permanent_residents=immigrants-net_emigration,
+         ref_date=as.numeric(str_sub(ref_date, 1,4)))|>
+  select(-immigrants, -net_emigration)|>
+  pivot_longer(cols=-ref_date)|>
+  as_tsibble(index=ref_date, key=name)
+
+immigrant_stream <- immigrant_data|>
+  model(ets=ETS(value),
+        tslm=TSLM(value~trend())
+        )|> 
+  forecast(h = forecast_horizon+1)|>
+  as_tibble()|>
+  group_by(ref_date, name)|>
+  summarize(value=mean(.mean))
+
+ggplot()+
+    geom_line(data=immigrant_data, mapping=aes(ref_date, value))+
+    geom_line(data=immigrant_stream, mapping = aes(ref_date, value), colour="blue")+
+  facet_wrap(~name)
+```
+
+## Participation rates:
+
+For the participation rate for new entrants we use Statistics Canada table [14-10-0017-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410001701) where we filter geo=="British Columbia", gender=="Total-gender", and age $\in$ [15,64].  We annualize this monthly LFS data, and create an ensemble forecast (ETS and TSLM) for the participation rate of working age British Columbians.
+
+```{r}
+entrant_part_rate <- part_rates("14-10-0017-01.csv")
+```
+
+For the participation rate for inter-provincial migrants, we use Statistics Canada table [14-10-0327-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410032701) where we filter geo=="Canada", gender=="Total-gender", and age $\in$ [15,64]. Using this annual data, we create an ensemble forecast (ETS and TSLM) for the participation rate of working age Canadians.
+
+```{r}
+canada_part_rate <-part_rates("14-10-0327-01.csv")
+```
+
+For the participation rates for the two streams (Permanent and Non-permanent residents) of immigrant labour we use Statistics Canada table [98-10-0446-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810044601). Note that this is 2021 census data (not LFS time series), so the participation rates are constant over the forecast horizon.  We filter geo=="British Columbia", Immigrant status and period of immigration $\in$ (2016-2021, Non-permanent residents), highest certificate=="Total", age $\in$ (15-24, 25-64), Gender=="Total", Visible minority=="Total", labour force status $\in$ (Employed, Unemployed, Not in the labour force). For permanent residents, we only consider those who landed between 2016-2021. Because the working age group is split into young/old age brackets, we need to aggregate before calculating working age (15-64) participation rates. 
+
+```{r}
+immigrant_part_rate <- part_rates("98-10-0446-01.csv")
+
+immigrant_part_rate$immigrant_class[1] <- "Permanent residents"
+pr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Permanent residents"]
+npr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Non-permanent residents"]
+
+kable(immigrant_part_rate)
+```
+
+## New Workers:
+
+To get the flow of young workers entering the labour force, we multiply the forecasts of new working age British Columbians and BC's working age (15-64) participation rate.
+
+```{r}
+entrant_participants <- entrant_stream|>
+  full_join(entrant_part_rate)|>
+  mutate(new_entrants=smoothed*part_rate)|>
+  select(ref_date, new_entrants)
+```
+
+To get the flow of inter-provincial migrants entering the BC labour force, we multiply the forecasts of net-interprovincial migrants and  Canada's working age (15-64) participation rate.
+
+```{r}
+inter_prov_participants <- inter_prov_stream|>
+  inner_join(canada_part_rate, by = join_by(ref_date))|>
+  mutate(net_new_interprovincial=interprovincial_people*canada_part_rate)|>
+  select(ref_date, net_new_interprovincial)
+```
+
+Regarding sources of new labour supply from outside Canada, one might worry about 
+double counting additions when a new permanent resident was formerly a non-permanent 
+resident. However, [Statistics Canada](https://www150.statcan.gc.ca/n1/pub/71-607-x/71-607-x2025011-eng.htm) notes that 
+
+>**Non-permanent residents, outflow** refers to the number of work and study permit holders leaving Canada, along with their family members who are not Canadian citizens, landed immigrants (permanent residents) or non-permanent residents themselves. This also includes permit holders and asylum claimants, protected persons and related groups staying in Canada who have been **granted permanent resident status**. In this case, these persons will be added to the immigrant component. Asylum claimants and related groups who have been deported are also counted as outflows.
+
+Thus, to get new permanent resident's contribution to new supply, we subtract net
+emigration from new permanent residents ("immigrants"), and then multiply the 
+difference by the permanent resident participation rate. Similarly, we multiply
+net non-permanent residents by the non-permanent participation rate. Finally, we add
+the two streams together.
+
+```{r}
+immigrant_participants <- immigrant_stream|>
+  pivot_wider()|>
+  mutate(permanent=permanent_residents*pr_part_rate,
+         non_permanent=net_non_permanent_residents*npr_part_rate,
+         immigrant_participants=permanent+non_permanent)|>
+  select(ref_date, immigrant_participants)|>
+  filter(ref_date > year(today()))
+```
+
+## Noc Proportions:
+
+In order to "inject" the new supply into the labour market, we need to know where,
+historically, these sources of new supply typically land (in terms of occupations.)
+
+For young workers, we make use of Statistics Canada Census table 98-10-0593-01, where we apply filters geo=="British Columbia", labour force status=="Employed", age=="15 to 19 years", gender=="Total", class of worker=="Employee".  We then calculate proportions for each of the NOCs, to give us an indication of first occupations for young British Columbians.
+
+```{r, message=FALSE}
+entrant_noc_props <- noc_props("98-10-0593-01.csv")
+```
+
+For inter-provincial migrants, we make use of Statistics Canada Census table 98-10-0449-01, and apply filters geo=="Canada", highest certificate=="Total", age=="Total, gender=="Total", labour force status=="Employed".  We then calculate proportions for each of the NOCs, to give us an indication of first occupations for inter-provincial migrants.
+
+```{r}
+canada_noc_props <- noc_props("98-10-0449-01.csv")
+```
+
+For immigrants, we make use of Statistics Canada Census table 98-10-0316-01, and apply filters admission category=="total", highest certificate=="total", age=="total", gender=="total", period of immigration=="2016-2021". We then calculate proportions for each of the NOCs, to give us an indication of first occupations for immigrants.
+
+
+```{r, message=FALSE}
+immigrant_noc_props <- noc_props("98-10-0316-01.csv")
+```
+
+
+## Assign new workers to NOCs:
+
+```{r}
+new_entrants <- crossing(entrant_participants, entrant_noc_props)|>
+  mutate(new_entrants=new_entrants*prop)|>
+  select(-prop, -desc)
+
+immigrants <- crossing(immigrant_participants, immigrant_noc_props)|>
+  mutate(immigrants=immigrant_participants*prop)|>
+  select(-immigrant_participants, -prop, -desc)
+
+interprovincial <- crossing(inter_prov_participants, canada_noc_props)|>
+  mutate(interprovincial=net_new_interprovincial*prop)|>
+  select(ref_date, noc, desc, interprovincial)
+```
+
+
+```{r}
 by_teer <- alluvium_prep(2, teer_names)
 by_broad <- alluvium_prep(1, broad_names)
 ```
@@ -321,4 +439,46 @@ alluvium_plot(by_teer)
 alluvium_plot(by_broad)
 ```
 
+## Inter-occupational mobility.
+
+From the above alluvium plots it should? be obvious that a disproportionate share of new supply is being "injected" into the labour market in TEER 5 Sales and services occupations, necessitating  inter-occupational mobility.  The first step to derive inter-occupational mobility is to calculate supply_no_mobility, which is the sum of the 3 streams of new supply. 
+
+```{r}
+supply_no_mobility <- full_join(immigrants, new_entrants, by = join_by(ref_date, noc))|>
+  full_join(interprovincial, by = join_by(ref_date, noc))|>
+  mutate(across(where(is.numeric), ~ replace_na(.x, 0)))|>
+  select(ref_date, noc, desc, everything())|>
+  mutate(supply_no_mobility=immigrants+new_entrants+interprovincial)
+```
+
+Inter-occupational mobility is driven by the difference between supply_no_mobility and demand, so lets load our demand forecast.
+
+```{r}
+demand <- read_rds(here("out","richs_forecast.rds"))|>
+  group_by(noc_5, year)|>
+  summarize(expansion_demand=sum(expansion_demand, na.rm=TRUE),
+            replacement_demand=sum(replacement_demand, na.rm=TRUE))|>
+  filter(year>min(year))|>
+  rename(ref_date=year)|>
+  mutate(demand=expansion_demand+replacement_demand)|>
+  select(noc=noc_5, ref_date, demand)
+```
+
+We assume that inter-occupational mobility balances supply and demand to the extent
+possible.  Supply and demand will never be exactly equal, so we normalize demand 
+so that, in aggregate, it *is* exactly equal to supply. Inter-occupational mobility is
+ the difference between normalized demand and supply_no_mobility. Supply is the
+ sum of supply_no_mobility and inter-occupational mobility. Finally, the residual
+ is the difference between demand and supply, which we assume is balanced by changes to
+ unemployment and participation among working age British Columbians.
+
+```{r}
+supply_and_demand <- full_join(supply_no_mobility, demand)|>
+  mutate(normalized_demand=demand*sum(supply_no_mobility, na.rm=TRUE)/sum(demand, na.rm=TRUE),
+         interoccupation_mobility=normalized_demand-supply_no_mobility,
+         supply=supply_no_mobility+interoccupation_mobility,
+         demand_minus_supply=demand-supply
+         )
+my_dt(supply_and_demand)
+```
 
