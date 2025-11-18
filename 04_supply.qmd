@@ -284,7 +284,7 @@ ggplot()+
 
 #### Immigrants
 
-For immigrants, we use data from Statistics Canada table [17-10-0014-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001401) where we filter geo=="British Columbia", gender=="Total-gender", type of migrant $\in$ (Immigrants, Net emigration, net non-permanent residents), and age $\in$ [15,64].  We create a series *permanent_residents* which is the difference between immigrants and net_emigration. We create an ensemble forecast using ETS and TSLM, plotted in blue below.  **Could use 15% of levels plan for BC's share? but working age???**
+For immigrants, we use data from Statistics Canada table [17-10-0014-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001401) where we filter geo=="British Columbia", gender=="Total-gender", type of migrant $\in$ (Immigrants, Net emigration, net non-permanent residents), and age $\in$ [15,64].  We create a series *permanent_residents* which is the difference between immigrants and net_emigration. We create an ensemble forecast using ETS and TSLM, plotted in blue below. Note that the immigrants component of permanent_residents is consistent with the levels plan for 2026-2028, but we can not use the levels plan to inform our forecast of **net** non-permanent residents.  
 
 ```{r}
 immigrant_data <- vroom(here("data",
@@ -293,22 +293,31 @@ immigrant_data <- vroom(here("data",
                               "17-10-0014-01.csv"))|>
   clean_names()|>
   select(ref_date, type_of_migrant, value)|>
-  pivot_wider(id_cols = ref_date, names_from = type_of_migrant, values_from = value)|>
   clean_names()|>
-  mutate(permanent_residents=immigrants-net_emigration,
-         ref_date=as.numeric(str_sub(ref_date, 1,4)))|>
-  select(-immigrants, -net_emigration)|>
-  pivot_longer(cols=-ref_date)|>
-  as_tsibble(index=ref_date, key=name)
-
-immigrant_stream <- immigrant_data|>
+  mutate(ref_date=as.numeric(str_sub(ref_date, 1,4)))|>
+  as_tsibble(index=ref_date, key=type_of_migrant)
+  
+ immigrant_stream <- immigrant_data|>
   model(ets=ETS(value),
         tslm=TSLM(value~trend())
         )|> 
   forecast(h = forecast_horizon+1)|>
   as_tibble()|>
-  group_by(ref_date, name)|>
-  summarize(value=mean(.mean))
+  group_by(ref_date, type_of_migrant)|>
+  summarize(value=mean(.mean))|>
+  pivot_wider(id_cols = ref_date, names_from = type_of_migrant, values_from = value)|>
+  clean_names()|>
+  mutate(permanent_residents=immigrants-net_emigration)|>
+  select(-immigrants, -net_emigration)|>
+  pivot_longer(cols=-ref_date)
+
+immigrant_data <- immigrant_data|>
+  as_tibble()|>
+  pivot_wider(names_from = type_of_migrant, values_from=value)|>
+  clean_names()|>
+  mutate(permanent_residents=immigrants-net_emigration)|>
+  select(-immigrants, -net_emigration)|>
+  pivot_longer(cols=-ref_date)
 
 ggplot()+
     geom_line(data=immigrant_data, mapping=aes(ref_date, value))+
@@ -465,11 +474,10 @@ demand <- read_rds(here("out","richs_forecast.rds"))|>
 ```
 
 We assume that inter-occupational mobility balances supply and demand to the extent
-possible.  Supply and demand will never be exactly equal, so we normalize demand 
-so that, in aggregate, it *is* exactly equal to supply. Inter-occupational mobility is
+possible.  Aggregate supply and aggregate demand will never be exactly equal, so we normalize demand so that it *is* exactly equal to supply. Inter-occupational mobility is
  the difference between normalized demand and supply_no_mobility. Supply is the
  sum of supply_no_mobility and inter-occupational mobility. Finally, the residual
- is the difference between demand and supply, which we assume is balanced by changes to
+ is the difference between demand and supply, assumed to be balanced by changes to
  unemployment and participation among working age British Columbians.
 
 ```{r}
