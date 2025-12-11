@@ -487,6 +487,9 @@ supply_and_demand <- full_join(supply_no_mobility, demand)|>
          supply=supply_no_mobility+interoccupation_mobility,
          demand_minus_supply=demand-supply
          )
+
+#write_rds(supply_and_demand, here("out", "rich_supply_and_demand.rds"))
+
 my_dt(supply_and_demand)
 ```
 
