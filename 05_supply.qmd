@@ -145,7 +145,7 @@ ggplot(kernel_weights, aes(age, `kernel weights`))+
 entrant_stream_data <- vroom(here("data",
                         "supply_side",
                         "put_bc_stats_demographics_here",
-                        "bcstats_shinyapps_io_popApp.csv"),
+                        "Population_Projections.csv"),
                    skip=6)|>
   clean_names()|>
   filter(age %in% 10:14)|>
@@ -388,7 +388,7 @@ immigrant_participants <- immigrant_stream|>
 In order to "inject" the new supply into the labour market, we need to know where,
 historically, these sources of new supply typically land (in terms of occupations.)
 
-For young workers, we make use of Statistics Canada Census table 98-10-0593-01, where we apply filters geo=="British Columbia", labour force status=="Employed", age=="15 to 19 years", gender=="Total", class of worker=="Employee".  We then calculate proportions for each of the NOCs, to give us an indication of first occupations for young British Columbians.
+For young workers, we make use of Statistics Canada Census table [98-10-0593-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810059301), where we apply filters geo=="British Columbia", labour force status=="Employed", age=="15 to 19 years", gender=="Total", class of worker=="Employee".  We then calculate proportions for each of the NOCs, to give us an indication of first occupations for young British Columbians.
 
 ```{r, cache=TRUE}
 entrant_noc_props <- open_dataset(here("data",
@@ -413,7 +413,7 @@ entrant_noc_props <- open_dataset(here("data",
     arrange(desc(prop))
 ```
 
-For inter-provincial migrants, we make use of Statistics Canada Census table 98-10-0449-01, and apply filters geo=="Canada", highest certificate=="Total", age=="Total, gender=="Total". We make use of the "Employed" counts to calculate proportions for each of the NOCs, to give us an indication of first occupations for inter-provincial migrants.
+For inter-provincial migrants, we make use of Statistics Canada Census table [98-10-0449-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810044901), and apply filters geo=="Canada", highest certificate=="Total", age=="Total, gender=="Total". We make use of the "Employed" counts to calculate proportions for each of the NOCs, to give us an indication of first occupations for inter-provincial migrants.
 
 ```{r, cache=TRUE}
 canada_noc_props <- open_dataset(here("data",
@@ -438,7 +438,7 @@ canada_noc_props <- open_dataset(here("data",
 
 ```
 
-For immigrants, we make use of Statistics Canada Census table 98-10-0316-01, and apply filters GEO=="Canada", admission category=="total", highest certificate=="total", age=="total", gender=="total", period of immigration=="2016-2021". We then calculate proportions for each of the NOCs, to give us an indication of first occupations for immigrants.
+For immigrants, we make use of Statistics Canada Census table [98-10-0316-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810031601), and apply filters GEO=="Canada", admission category=="total", highest certificate=="total", age=="total", gender=="total", period of immigration=="2016-2021". We then calculate proportions for each of the NOCs, to give us an indication of first occupations for immigrants.
 
 
 ```{r, cache=TRUE}

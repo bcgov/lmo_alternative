@@ -1,8 +1,18 @@
 #'This script downloads most of the files necessary for the supply side of the model
-#'from statistics canada.  Some of the files are large enough they will not fit into RAM
-#'so for the larger files we parquet them.  Other inputs can be found in the supply_side
-#'sub-directories noc_descriptions and put_bc_stats_demographics_here.  There is no api
-#'for bc stats, so you have to manually download this data.
+#'from statistics canada. We parquet the large files. Each year you need to:
+
+#'1) download the file "Population_Projections.csv" from https://bcstats.shinyapps.io/popApp/.  Choose:
+  #'region type=="Regional District",
+  #'region=="British Columbia",
+  #''year %in% 2000:year(today())+10,
+  #'gender=="Totals",
+  #'statistic=="counts",
+  #'age format=="single age groups",
+  #'display as columns=="none".
+#'2) delete all files in data/supply_side (but leave directories "noc_descriptions" and"put_bc_stats_demographics_here").
+#'3) delete 05_supply_cache.
+#'4) source this file.
+#'5) render file 05_supply.qmd
 
 #constants--------------------
 urls <- c("https://www150.statcan.gc.ca/n1/tbl/csv/17100015-eng.zip",
