@@ -1,20 +1,20 @@
 #'This script downloads most of the files necessary for the supply side of the model
 #'from statistics canada. We parquet the large files. Each year you need to:
 
-#'1) download the file "Population_Projections.csv" from https://bcstats.shinyapps.io/popApp/.  Choose:
-  #'region type=="Regional District",
-  #'region=="British Columbia",
-  #''year %in% 2000:year(today())+10,
-  #'gender=="Totals",
-  #'statistic=="counts",
-  #'age format=="single age groups",
-  #'display as columns=="none".
-#'2) delete all files in data/supply_side (but leave directories "noc_descriptions" and"put_bc_stats_demographics_here").
-#'3) delete 05_supply_cache.
-#'4) source this file.
-#'5) render file 05_supply.qmd
+path <- here::here("data","supply_side")
 
-#constants--------------------
+#'1) delete all files in data/supply_side EXCEPT directory "noc_descriptions".
+#'2) bc data catalogue url does not look particularly stable... likely have to update:
+
+bc_stats_url <- "https://catalogue.data.gov.bc.ca/dataset/86839277-986a-4a29-9f70-fa9b1166f6cb/resource/36610a52-6f90-4ed6-946d-587641a490df/download/regional-district-population.csv"
+
+utils::download.file(bc_stats_url,
+                     destfile = here(path, "Population_Projections.csv"),
+                     mode = "wb",
+                     method = "curl")
+
+#stats can urls... look more stable
+
 urls <- c("https://www150.statcan.gc.ca/n1/tbl/csv/17100015-eng.zip",
           "https://www150.statcan.gc.ca/n1/tbl/csv/17100014-eng.zip",
           "https://www150.statcan.gc.ca/n1/tbl/csv/14100327-eng.zip",
@@ -22,8 +22,6 @@ urls <- c("https://www150.statcan.gc.ca/n1/tbl/csv/17100015-eng.zip",
           "https://www150.statcan.gc.ca/n1/tbl/csv/98100593-eng.zip",
           "https://www150.statcan.gc.ca/n1/tbl/csv/98100449-eng.zip",
           "https://www150.statcan.gc.ca/n1/tbl/csv/98100316-eng.zip")
-
-path <- here::here("data","supply_side")
 
 #functions---------------------------------
 
@@ -146,11 +144,66 @@ results <- lapply(urls, function(u) {
   )
 })
 
-
-
-
-
-
-
-
-
+#example usage
+#
+# library(dplyr)
+# library(arrow)
+# library(purrr)
+# library(tibble)
+#
+# ds <- open_dataset(here("data", "supply_side", "98100446_parquet"))
+# #this does NOT load the dataset into memory, but allows you to peek inside to find variables to filter on and to select prior to loading into memory.
+#
+# #find categorical variables and their levels.
+# infer_categorical_levels <- function(
+#     ds,
+#     min_card = 4,
+#     max_card = 200,
+#     sort_levels = TRUE
+# ) {
+#   stopifnot(inherits(ds, "Dataset"))
+#
+#   # 1) Cardinality (cheap, 1 row)
+#   card <- ds |>
+#     summarise(across(everything(), n_distinct)) |>
+#     collect()
+#
+#   keep <- tibble(
+#     column = names(card),
+#     n_distinct = as.integer(card[1, ]))|>
+#     filter(n_distinct >= min_card, n_distinct <= max_card)
+#
+#   if (nrow(keep) == 0) {
+#     return(keep |> mutate(levels = list())) #short circuit if no variables have cardinality in range.
+#   }
+#
+#   # 3) Retrieve levels (column-by-column)
+#   levels <- map(keep$column, function(col) {
+#     q <- ds |> distinct(!!sym(col))
+#     if (sort_levels) q <- q |> arrange(!!sym(col))
+#     q |> collect() |> pull(1)
+#   })
+#
+#   # 4) Return named list
+#   keep |>
+#     mutate(levels = levels)|>
+#     select(-n_distinct)|>
+#     deframe()
+# }
+#
+# infer_categorical_levels(ds)
+#
+# #now we know the variable names and levels, we can filter, select, and then finally collect... collect is what loads data into RAM... you can see from below that the dataset we actually end up loading into RAM is tiny compared to the original table.
+#
+# ds|>
+#   filter(GEO == "British Columbia",
+#        `Immigrant status and period of immigration (11)`%in% c("2016 to 2021","Non-permanent residents"),
+#        `Highest certificate, diploma or degree (7)`=="Total - Highest certificate, diploma or degree",
+#        `Age (15A)`%in% c("15 to 24 years","25 to 64 years"),
+#        `Gender (3)`=="Total - Gender",
+#        `Visible minority (15)`=="Total - Visible minority",
+#        `Statistics (3)`=="Count")|>
+#   select(contains("status"), contains("age"))|>
+#   collect()
+#
+#
