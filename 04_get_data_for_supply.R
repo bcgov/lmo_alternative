@@ -1,7 +1,7 @@
+path <- here::here("data","supply_side")
+
 #'This script downloads most of the files necessary for the supply side of the model
 #'from statistics canada. We parquet the large files. Each year you need to:
-
-path <- here::here("data","supply_side")
 
 #'1) delete all files in data/supply_side EXCEPT directory "noc_descriptions".
 #'2) bc data catalogue url does not look particularly stable... likely have to update:
@@ -9,7 +9,7 @@ path <- here::here("data","supply_side")
 bc_stats_url <- "https://catalogue.data.gov.bc.ca/dataset/86839277-986a-4a29-9f70-fa9b1166f6cb/resource/36610a52-6f90-4ed6-946d-587641a490df/download/regional-district-population.csv"
 
 utils::download.file(bc_stats_url,
-                     destfile = here(path, "Population_Projections.csv"),
+                     destfile = here::here(path, "Population_Projections.csv"),
                      mode = "wb",
                      method = "curl")
 
