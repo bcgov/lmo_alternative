@@ -230,11 +230,11 @@ renderUI({#need the renderUI because dropdown list is a reactive object
 })
 
 sliderInput("shift", "Shift up or down",
-  min = .7, max = 1.3,
+  min = .5, max = 1.5,
   value = 1, step = .01
 )
 sliderInput("slope", "Change slope",
-  min = .95, max = 1.03,
+  min = .95, max = 1.05,
   value = 1, step = .001
 )
 actionButton("save", "Save modified shares to disk")
@@ -389,182 +389,6 @@ observeEvent(input$save, {
     write_rds(here("out","modified", "bc_forecast.rds"))
 })
 ```
-
-# Why?
-
-#### Potential Benefits
-
-- Forecast would be available within 10 minutes of budget numbers being released.
-- It could be used in early stakeholder consultations: e.g. "This is our first cut forecast for your industry (and top occupations within), what do you think?"
-- It could serve as a point of reference for the numerous Stokes model cuts.
-- Unlike the Stokes model, where we are increasingly constrained (e.g. we can't change this without messing up that), any dimension can be changed at any point, and the model rebalances to respect the top level constraint.  
-
-#### Limitations
-
--  I have not incorporated the "driver" forecasts or information from major projects: the model is purely backward looking.
-
--  That being said, this app allows the user to modify/match the overall level and growth rate of slices (region, industry, occupation) of the labour market. 
-
--  The model currently only considers employment levels and demand. (no supply model) 
-
-#### Correlation between Stokes and Rich:
-
-- Employment:
-    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .97
-    -  When aggregated to occupation (512) the correlation is $\approx$ .99
- 
-- Replacement Demand:
-    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .97
-    -  When aggregated to occupation (512) the correlation is $\approx$ .94
-    
-- Expansion Demand:
-    -  When aggregated to industry:region combos (63*7=441) the correlation is $\approx$ .87
-    -  When aggregated to occupation (512) the correlation is $\approx$ .8
-
-# Baseline
-
-### Baseline Proportions
-
--   For the BC LMO we are constrained by the Finance forecast.
-
--   Given this constraint, in effect we are forecasting proportions of BC employment.
-
--   Using census 2021 and monthly LFS data from the years 2018:2024, we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
-
--   Specifically, the baseline proportions are a weighted average of Census and LFS proportions, where the weight on Census is 0.83 and the weight on LFS is 0.17.
-
--   These weights reflect the effective sample size (number of workers covered) of the two sources:
-
-```{r, echo=FALSE}
-kable(
-  tibble(
-    Source = c("LFS (7 years)", "Census (2021)"),
-    `Effective N (distinct workers)` = c("~1 million", "~4.8 million")
-  ),
-  caption = "Effective sample size of LFS and Census data"
-)|>
-  kable_styling(full_width = FALSE, position = "left")
-```
-
--  If we applied these weighted proportions to BC's aggregate employment forecast, **every** combination of region, industry and occupation would grow at the same rate as BC as a whole.
-
-#### Calculation of Effective N
-
-##### Census
-
-- In 2021 there were 14,978,940 occupied private households in Canada, of which 25% received the long form census: 3,744,735 households.
-- The total number of employed in Canada was 19,166,110.  If we divide the total employed by the number of households we get 1.28 workers per household.
-- Thus the 2021 Census collected labour market information on approximately 4.8 million workers.
-
-##### Labour Force Survey
-
--   Survey is sent to 56,000 households each month, 1/6th of which are new to the sample (LFS uses rotating panel where household followed for 6 months).
--   Distinct households sampled over 84 months ≈ (56,000/6)*84 = 784,000.
--   Given the 1.28 workers per household calculated above, LFS covered approximately 1 million distinct workers over 7 years.
-
-# Change 
-
-Column 
--------------------------------------
-
-### Buckle up... its time to get Baysian
-
--   Obviously the composition of the BC labour market is not fixed: Next we describe how we model the evolution of the proportions over time.
--  We first estimate the growth rate of BC as a whole by fitting this model:
-
-$$ log(Employment+1) \sim year+\epsilon$$
-
--  The slope coefficient from this regression $\hat{\beta}_{BC}$ will serve as our prior belief: what we would expect in the absence of any other information. 
--  We slice BC into 7 regions, 63 industries and 512 occupations: 582 slices of BC's labour market.
--  We fit the above model to each slice, yielding 582 slope coefficients $\hat{\beta_s}$, and their standard errors $SE(\hat{\beta}_s)$.
--  The question is how convincing is each slice's slope estimate? i.e. How much should we update our prior belief?
--  Two things determine the extent to which we update our beliefs: 
-    1) $(SE(\hat{\beta}_s))^2$, a measure of the noise around the trend for a given slice.  
-    2) $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$, a measure of how much slope variation there is *between* the slices.
--  If a slice's slope is estimated precisely and there is a lot of variability between slices then we basically ignore the prior (yellow areas in heatmap to right).
--  If a slice's slope is estimated imprecisely and there is not much variability between slices then we weight the prior heavily (purple areas in heatmap to right).
--  Specifically, we create a weighted average of the prior and the slice's slope estimate, where the weight on $\hat{\beta}_s$ is
-
-$$w_{\hat{\beta}_s}=\frac{\tau^2}{\tau^2 + (SE(\hat{\beta}_s))^2}$$
-
-
-Column {.tabset}
--------------------------------------
-
-### Weight on $\hat{\beta_s}$
-
-```{r}
-var <- seq(0,1,.01)
-tau2 <- var
-
-tbbl <- crossing(var, tau2)|>
-  mutate(weight=tau2/(var+tau2))
-
-plot_ly(
-  data = tbbl,
-  x = ~var,
-  y = ~tau2,
-  z = ~weight,
-  type = "heatmap",
-  colors = viridis(100, option = "D"),
-  zmin = min(tbbl$weight, na.rm = TRUE),
-  zmax = max(tbbl$weight, na.rm = TRUE),
-  showscale = TRUE,
-  text = ~paste0(
-    "SE(β)²: ", signif(var, 4), "<br>",
-    "τ²: ", signif(tau2, 4), "<br>",
-    "ω: ", signif(weight, 4)
-  ),
-  hoverinfo = "text"
-) %>%
-  layout(
-    xaxis = list(title = "SE(β)²"),
-    yaxis = list(title = "τ²")
-  ) %>%
-  colorbar(title = list(text = "ω"))
-```
-
-### $\hat{\beta}_s$ vs Shrunken slope (NOCs)
-
-```{r}
-bc_slope <- for_shrinkage_plot$bc_slope[1]
-
-plt <- ggplot(for_shrinkage_plot, aes(slope, shrunk_slope, colour=size, label=noc_5))+
-  geom_abline(slope=1, intercept = 0, colour="white", lwd=3)+
-  geom_vline(xintercept = bc_slope, colour="white", lwd=3)+
-  geom_hline(yintercept = bc_slope, colour="white", lwd=3)+
-  geom_point()+
-  geom_rug()+
-  scale_colour_viridis_c(trans="log10", labels=scales::comma)+
-  labs(x="Original Slope",
-       y="Shrunken Slope",
-       colour="Employment")+
-  xlim(-.25,.2)+
-  ylim(-.25,.2)
-
-
-plotly::ggplotly(plt)%>%
-  layout(
-    autosize = FALSE,
-    width = 600,
-    height = 500,
-    xaxis = list(scaleanchor = "y"),
-    yaxis = list(scaleanchor = "x"),
-    legend = list(orientation = "h",
-                  x = 0.5, xanchor = "center",
-                  y = -0.15)
-  )
-```
-
-# Growth Factors
-
--  In order to convert the shrunken slope coefficients to growth factors we exponentiate: e.g. if $\hat{\beta}_s=-.016$ then "growth" factor is $e^{-.016}=0.984$
--  We then apply these marginal growth factors to the baseline proportions for the forecast horizon.
--   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
--   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
--   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
--   This is in contrast to the baseline *levels*, where the sparsity alone indicates strong dependency between region, industry and occupation.
--   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
 
 # BC
 
@@ -806,6 +630,169 @@ renderPlotly({
   ggplotly(plt, tooltip = "text")
 })
 ```
+
+# Why?
+
+#### Potential Benefits
+
+- Forecast would be available within 10 minutes of budget numbers being released.
+- It could be used in early stakeholder consultations: e.g. "This is our first cut forecast for your industry (and top occupations within), what do you think?"
+- It could serve as a point of reference for the numerous Stokes model cuts.
+- Unlike the Stokes model, where we are increasingly constrained (e.g. we can't change this without messing up that), any dimension can be changed at any point, and the model rebalances to respect the top level constraint.  
+
+#### Limitations
+
+-  I have not incorporated the "driver" forecasts or information from major projects: the model is purely backward looking.
+
+-  That being said, this app allows the user to modify/match the overall level and growth rate of slices (region, industry, occupation) of the labour market. 
+
+# Baseline
+
+### Baseline Proportions
+
+-   For the BC LMO we are constrained by the Finance forecast.
+
+-   Given this constraint, in effect we are forecasting proportions of BC employment.
+
+-   Using census 2021 and monthly LFS data from the years 2017:2025, we calculate baseline proportions of BC employment based on every combination of region, industry and occupation.
+
+-   Specifically, the baseline proportions are a weighted average of Census and LFS proportions, where the weight on Census is 0.79 and the weight on LFS is 0.21.
+
+-   These weights reflect the effective sample size (number of workers covered) of the two sources:
+
+```{r, echo=FALSE}
+kable(
+  tibble(
+    Source = c("LFS (9 years)", "Census (2021)"),
+    `Effective N (distinct workers)` = c("~1.29 million", "~4.8 million")
+  ),
+  caption = "Effective sample size of LFS and Census data"
+)|>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+-  If we applied these weighted proportions to BC's aggregate employment forecast, **every** combination of region, industry and occupation would grow at the same rate as BC as a whole.
+
+#### Calculation of Effective N
+
+##### Census
+
+- In 2021 there were 14,978,940 occupied private households in Canada, of which 25% received the long form census: 3,744,735 households.
+- The total number of employed in Canada was 19,166,110.  If we divide the total employed by the number of households we get 1.28 workers per household.
+- Thus the 2021 Census collected labour market information on approximately 4.8 million workers.
+
+##### Labour Force Survey
+
+-   Survey is sent to 56,000 households each month, 1/6th of which are new to the sample (LFS uses rotating panel where household followed for 6 months).
+-   Distinct households sampled over 108 months ≈ (56,000/6)*108 = 1,008,000.
+-   Given the 1.28 workers per household calculated above, LFS covered approximately 1.29 million distinct workers over 9 years.
+
+# Change 
+
+Column 
+-------------------------------------
+
+### Buckle up... its time to get Baysian
+
+-   Obviously the composition of the BC labour market is not fixed: Next we describe how we model the evolution of the proportions over time.
+-  We first estimate the growth rate of BC as a whole by fitting this model:
+
+$$ log(Employment+1) \sim year+\epsilon$$
+
+-  The slope coefficient from this regression $\hat{\beta}_{BC}$ will serve as our prior belief: what we would expect in the absence of any other information. 
+-  We slice BC into 7 regions, 63 industries and 512 occupations: 582 slices of BC's labour market.
+-  We fit the above model to each slice, yielding 582 slope coefficients $\hat{\beta_s}$, and their standard errors $SE(\hat{\beta}_s)$.
+-  The question is how convincing is each slice's slope estimate? i.e. How much should we update our prior belief?
+-  Two things determine the extent to which we update our beliefs: 
+    1) $(SE(\hat{\beta}_s))^2$, a measure of the noise around the trend for a given slice.  
+    2) $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$, a measure of how much slope variation there is *between* the slices.
+-  If a slice's slope is estimated precisely and there is a lot of variability between slices then we basically ignore the prior (yellow areas in heatmap to right).
+-  If a slice's slope is estimated imprecisely and there is not much variability between slices then we weight the prior heavily (purple areas in heatmap to right).
+-  Specifically, we create a weighted average of the prior and the slice's slope estimate, where the weight on $\hat{\beta}_s$ is
+
+$$w_{\hat{\beta}_s}=\frac{\tau^2}{\tau^2 + (SE(\hat{\beta}_s))^2}$$
+
+
+Column {.tabset}
+-------------------------------------
+
+### Weight on $\hat{\beta_s}$
+
+```{r}
+var <- seq(0,1,.01)
+tau2 <- var
+
+tbbl <- crossing(var, tau2)|>
+  mutate(weight=tau2/(var+tau2))
+
+plot_ly(
+  data = tbbl,
+  x = ~var,
+  y = ~tau2,
+  z = ~weight,
+  type = "heatmap",
+  colors = viridis(100, option = "D"),
+  zmin = min(tbbl$weight, na.rm = TRUE),
+  zmax = max(tbbl$weight, na.rm = TRUE),
+  showscale = TRUE,
+  text = ~paste0(
+    "SE(β)²: ", signif(var, 4), "<br>",
+    "τ²: ", signif(tau2, 4), "<br>",
+    "ω: ", signif(weight, 4)
+  ),
+  hoverinfo = "text"
+) %>%
+  layout(
+    xaxis = list(title = "SE(β)²"),
+    yaxis = list(title = "τ²")
+  ) %>%
+  colorbar(title = list(text = "ω"))
+```
+
+### $\hat{\beta}_s$ vs Shrunken slope (NOCs)
+
+```{r}
+bc_slope <- for_shrinkage_plot$bc_slope[1]
+
+plt <- ggplot(for_shrinkage_plot, aes(slope, shrunk_slope, colour=size, label=noc_5))+
+  geom_abline(slope=1, intercept = 0, colour="white", lwd=3)+
+  geom_vline(xintercept = bc_slope, colour="white", lwd=3)+
+  geom_hline(yintercept = bc_slope, colour="white", lwd=3)+
+  geom_point()+
+  geom_rug()+
+  scale_colour_viridis_c(trans="log10", labels=scales::comma)+
+  labs(x="Original Slope",
+       y="Shrunken Slope",
+       colour="Employment")+
+  xlim(-.25,.2)+
+  ylim(-.25,.2)
+
+
+plotly::ggplotly(plt)%>%
+  layout(
+    autosize = FALSE,
+    width = 600,
+    height = 500,
+    xaxis = list(scaleanchor = "y"),
+    yaxis = list(scaleanchor = "x"),
+    legend = list(orientation = "h",
+                  x = 0.5, xanchor = "center",
+                  y = -0.15)
+  )
+```
+
+# Growth Factors
+
+-  In order to convert the shrunken slope coefficients to growth factors we exponentiate: e.g. if $\hat{\beta}_s=-.016$ then "growth" factor is $e^{-.016}=0.984$
+-  We then apply these marginal growth factors to the baseline proportions for the forecast horizon.
+-   For example, suppose that a region/industry/occupation combination accounted for an estimated 1% of the BC labour market in 2021. Suppose that region's growth factor is 1.02, the industry's growth factor is 1.03, and the occupation's growth factor is .96
+-   For the forecast year $t$ years after 2021, the un-adjusted proportion is $.01\times(1.02^{t}\times1.03^{t}\times.96^{t})^\frac13$.
+-   Note that regarding the *change* in proportions over time, region, industry and occupation are assumed to be independent.
+-   This is in contrast to the baseline *levels*, where the sparsity alone indicates strong dependency between region, industry and occupation.
+-   Note that these un-adjusted proportions will not necessarily sum to 1: we adjust so they do so.
+
+
+
 
 # Example
 

@@ -28,19 +28,14 @@ conflicts_prefer(dplyr::select)
 conflicts_prefer(lubridate::year)
 #constants-----------------------------
 options(scipen = 999)
-forecast_horizon <- 10
-forecast_years <- 2026:2035
+forecast_horizon <- 11
+forecast_years <- 2027:2036 #CHANGE THIS YEARLY (OR MAKE DATA DEPENDENT)
 knitr::opts_chunk$set(
   message = FALSE,  # hide messages
   warning = FALSE   # hide warnings
 )
 #functions-------------------
 
-read_lengthen_clean <- function(file){
-  read_excel(here("data","stokes_data", file), skip=3)%>%
-    pivot_longer(cols= starts_with("2"), names_to = "year", values_to = "value")%>%
-    clean_names()
-}
 alluvium_prep <- function(new_entrants, immigrants, interprovincial, noc_digit, names){
   new_entrants_ten <- new_entrants|>
     mutate(noc=str_sub(noc, noc_digit, noc_digit))|>
@@ -80,7 +75,7 @@ alluvium_plot <- function(tbbl){
 # get names for NOC Broad Categories and TEER levels-----------------------
 broad_names <- vroom(here("data", 
                         "supply_side", 
-                        "noc_descriptions",
+                        "noc_descriptions(keep)",
                         "noc_2021_version_1.0_-_classification_structure.csv"))|>
   select(noc=contains("noc"),
          desc=`Class title`,
@@ -91,7 +86,7 @@ broad_names <- vroom(here("data",
 
 teer_names <- read_csv(here("data", 
                             "supply_side", 
-                            "noc_descriptions",
+                            "noc_descriptions(keep)",
                             "teer_description_short.csv"))|>
   transmute(noc=as.character(teer),
             desc=data)
@@ -130,11 +125,12 @@ bc_part_rate_historic <- can_bc_part_rates|>
 bc_part_rate <- bc_part_rate_historic|>
   model(ets=ETS(part_rate~trend()),
         tslm=TSLM(part_rate~trend()))|>
-  forecast(h=forecast_horizon+1)|> #data ends in 2024 so need to extend forecast horizon
+  forecast(h=forecast_horizon)|> 
   as_tibble()|>
   group_by(ref_date)|>
   summarize(part_rate=mean(.mean))|>
-  filter(ref_date %in% forecast_years) #discard 2025
+  filter(ref_date %in% forecast_years)
+
 
 #Table 17100015 provides Net-migration for BC. 
 inter_prov_data <- vroom(here("data", "supply_side", "17100015.csv"))|>
@@ -143,7 +139,7 @@ inter_prov_data <- vroom(here("data", "supply_side", "17100015.csv"))|>
          gender=="Total - gender",
          migrants=="Net-migration",
          age_group=="15 to 64 years")|>
-  mutate(ref_date=as.numeric(str_sub(ref_date, 1, 4)))|>
+  mutate(ref_date=as.numeric(str_sub(ref_date, 6, 9)))|> #raw dates are of form 2024/2025 
   select(ref_date, value)|>
   as_tsibble(index=ref_date)
 
@@ -151,11 +147,11 @@ inter_prov_stream <- inter_prov_data|>
   model(ets=ETS(value),
         tslm=TSLM(value~trend())
         )|> 
-  forecast(h = forecast_horizon+1)|>
+  forecast(h = forecast_horizon)|>
   as_tibble()|>
   group_by(ref_date)|>
   summarize(interprovincial_people=mean(.mean))|>
-    filter(ref_date %in% forecast_years) #discard 2025  
+  filter(ref_date %in% forecast_years)
  
 # Table 14100327 provides the participation rate for Canada: applied to net interprovincial
  
@@ -172,13 +168,13 @@ can_part_rate_historic <- can_bc_part_rates|>
     as_tsibble(index=ref_date)
 
 can_part_rate <- can_part_rate_historic|>
-    model(ets=ETS(part_rate~trend()),
-          tslm=TSLM(part_rate~trend()))|>
-    forecast(h=forecast_horizon+1)|>
-    as_tibble()|>
-    group_by(ref_date)|>
-    summarize(part_rate=mean(.mean))|>
-    filter(ref_date %in% forecast_years) #discard 2025 
+  model(ets=ETS(part_rate~trend()),
+        tslm=TSLM(part_rate~trend()))|>
+  forecast(h=forecast_horizon)|>
+  as_tibble()|>
+  group_by(ref_date)|>
+  summarize(part_rate=mean(.mean))|>
+  filter(ref_date %in% forecast_years)
 
 #Sources of foreign supply
 
@@ -188,7 +184,7 @@ immigrant_data <- vroom(here("data", "supply_side", "17100014.csv"))|>
          gender=="Total - gender",
          type_of_migrant %in% c("Immigrants", "Net emigration", "Net non-permanent residents"),
          age_group=="15 to 64 years")|>
-  mutate(ref_date=as.numeric(str_sub(ref_date, 1,4)))|>
+  mutate(ref_date=as.numeric(str_sub(ref_date, 6,9)))|>
   select(ref_date, type_of_migrant, value)|>
   as_tsibble(index=ref_date, key=type_of_migrant)
 
@@ -196,7 +192,7 @@ immigrant_stream <- immigrant_data|>
   model(ets=ETS(value),
         tslm=TSLM(value~trend())
         )|> 
-  forecast(h = forecast_horizon+1)|>
+  forecast(h = forecast_horizon)|>
   as_tibble()|>
   group_by(ref_date, type_of_migrant)|>
   summarize(value=mean(.mean))|>
@@ -205,7 +201,7 @@ immigrant_stream <- immigrant_data|>
   mutate(permanent_residents=immigrants-net_emigration)|>
   select(-immigrants, -net_emigration)|>
   pivot_longer(cols=-ref_date)|>
-  filter(ref_date %in% forecast_years) #discard 2025 
+  filter(ref_date %in% forecast_years)
 
 #flow of immigrant people  
 immigrant_data <- immigrant_data|>
@@ -310,12 +306,17 @@ demand <- read_rds(here("out","richs_forecast.rds"))|>
   group_by(noc_5, year)|>
   summarize(expansion_demand=sum(expansion_demand, na.rm=TRUE),
             replacement_demand=sum(replacement_demand, na.rm=TRUE))|>
-  filter(year>min(year))|>
   rename(ref_date=year)|>
+  filter(ref_date %in% forecast_years)|>
   mutate(`Job Openings`=expansion_demand+replacement_demand)|>
   select(noc=noc_5, ref_date, `Job Openings`)
 
-stokes_total <- read_lengthen_clean("supply_demand.xlsx")|>
+stokes_total <- read_excel(here("data",
+                                "supply_side", 
+                                "stokes_data(replace)", 
+                                "supply_demand.xlsx"), skip=3)%>%
+  pivot_longer(cols= starts_with("2"), names_to = "year", values_to = "value")%>%
+  clean_names()|>
   filter(noc=="#T",
          industry=="All Industries",
          geographic_area=="British Columbia",
@@ -331,7 +332,7 @@ stokes_total <- read_lengthen_clean("supply_demand.xlsx")|>
   pivot_wider()|>
   mutate(`Decline in unemployment`=`Job Openings`-`Total Supply Change`,
          `Change in labour market participation`=`Net Other Mobility`+`Decline in unemployment`)|>
-  pivot_longer(cols=everything(), values_to = "stokes")
+  pivot_longer(cols=everything(), values_to = "stokes (previous)")
 ```
 
 ## Caveat Emptor
@@ -680,7 +681,7 @@ supply_and_demand_reactive <- reactive({
 rich_total <- reactive({
   supply_and_demand_reactive()|>
   summarise(across(-c(ref_date, noc, desc), ~ sum(.x, na.rm = TRUE)))|>
-  pivot_longer(cols=everything(), values_to = "rich")
+  pivot_longer(cols=everything(), values_to = "rich (current)")
 })
 
 joined_reactive <- reactive({
@@ -833,7 +834,8 @@ output$broad_alluvium <- renderPlot(alluvium_plot(by_broad_reactive()))
 output$supply_demand <- renderDT({
 
   df <- supply_and_demand_reactive()|>
-    mutate(ref_date=as.character(ref_date))
+    mutate(ref_date=as.character(ref_date))|>
+    arrange(noc, ref_date)
  
   no_underscores <- colnames(df)|>
     str_replace_all("_"," ")
@@ -870,9 +872,9 @@ output$download_full <- downloadHandler(
 
 output$results <- renderReactable({
   joined_reactive()|>
-     reactable(columns = list(rich = colDef(format = colFormat(digits = 0, separators = TRUE)),
-                              stokes=colDef(format = colFormat(digits = 0, separators = TRUE)) 
-                              ),
+      reactable(columns = list(`rich (current)`= colDef(format = colFormat(digits = 0, separators = TRUE)),
+                               `stokes (previous)`= colDef(format = colFormat(digits = 0, separators = TRUE)) 
+                               ),
                pagination = FALSE,
                compact = TRUE,
                bordered = TRUE,
@@ -880,8 +882,6 @@ output$results <- renderReactable({
                style = list(fontSize = "10px")
                )
 })
-
-
 
 ```
 

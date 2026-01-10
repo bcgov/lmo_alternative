@@ -9,10 +9,13 @@ library(fpp3)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
+conflicts_prefer(vroom::cols)
+conflicts_prefer(vroom::col_double)
+conflicts_prefer(vroom::col_character)
 #constants---------------------
-census_weight <- 0.827586207 #long form 2021 census covered 4.8M workers, 7 years of LFS covered 1M (distinct) workers.
-base_years <- c(2018:2024) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
-base_plus <- 4:14 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
+census_weight <- 0.789473684 #long form 2021 census covered 4.8M workers, NINE years of LFS covered 1.28M (distinct) workers.
+base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
+base_plus <- 5:15 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
 budget_weight <- .62 #our forecast grows at a weighted average of the historic growth and the budget growth rate.
 #functions-----------------------
 
@@ -59,13 +62,20 @@ census_mapping <- read_excel(here("data","mapping","mapping_census_to_lmo_63.xls
 
 #read in the raw data----------------------
 
-lfs <- vroom(list.files(here("data","status"), pattern = "_stat", full.names = TRUE))|>
+lfs <- vroom(list.files(here("data","status"),
+                        pattern = "_stat",
+                        full.names = TRUE),
+             col_types = cols(SYEAR = col_double(),
+                              BC_REGION = col_character(),
+                              NAICS_5 = col_character(),
+                              NOC_5 = col_character(),
+                              `_COUNT_` = col_double()))|>
   clean_names()|>
   rename(year=syear,
          employment=count)|>
   mutate(employment=employment/12,
          noc_5=if_else(noc_5 %in% c("00011", "00012", "00013", "00014", "00015"), "00018", noc_5))|>
-  filter(!is.na(year) & year<max(year, na.rm=TRUE))|>
+  filter(!is.na(year))|># & year<max(year, na.rm=TRUE))|> #typically we want to disregard partial year at end.
   inner_join(mapping)|>
   group_by(year, bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
   summarize(employment=sum(employment))
@@ -159,7 +169,7 @@ bc_forecast <- our_forecast|>
   bind_rows(bc_with_cagr, budget)|>
   arrange(year)
 
-#' BASELINE LFS SHARES: (2018:2024)------------
+#' BASELINE LFS SHARES: (2017:2025)------------
 
 lfs_base_share <- lfs|>
   filter(year %in% base_years, #note that some NOCs have either missing or zero employment for the base years
