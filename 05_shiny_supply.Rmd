@@ -384,7 +384,11 @@ fluidPage(
 
 ### Net inter-provincial migrants
 
-For net inter-provincial migrants, we use data from Statistics Canada table [17-10-0015-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001501).  For the participation rate for inter-provincial migrants, we use Statistics Canada table [14-10-0327-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410032701) and filter for Canada. For both these series we create an ensemble forecast using ETS and TSLM, which is plotted in blue.
+For net inter-provincial migrants, we use data from Statistics Canada table [17-10-0015-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710001501). We filter geo=="British Columbia", gender=="Total - gender", migrants=="Net-migration" and age_group=="15 to 64 years". 
+
+For the participation rate for inter-provincial migrants, we use Statistics Canada table [14-10-0327-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410032701) and filter for geo=="Canada", gender=="Total - Gender", age_group=="15 to 64 years" and labour_force_characteristics=="Participation rate".
+
+For both these series we create an ensemble forecast using ETS and TSLM, which is plotted in blue.
 
 
 ```{r, fig.retina=2}
@@ -471,11 +475,47 @@ historically, these sources of new supply typically land (in terms of occupation
 
 For young workers, we make use of Statistics Canada Census table [98-10-0593-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810059301), where we apply filters geo=="British Columbia", labour force status=="Employed", age=="15 to 19 years", gender=="Total", class of worker=="Employee".  We then calculate proportions for each of the NOCs, to give us an indication of first occupations for young British Columbians.
 
+```{r}
+entrant_noc_props|>
+  slice_max(prop, n=10)|>
+  ggplot(aes(prop, fct_reorder(desc, prop)))+
+  geom_col()+
+  labs(title="Top NOCs for new entrants.",
+       x="Proportion",
+       y=NULL)+
+  theme_minimal()
+```
+
+
 
 For inter-provincial migrants, we make use of Statistics Canada Census table [98-10-0449-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810044901), and apply filters geo=="Canada", highest certificate=="Total", age=="Total, gender=="Total". We make use of the "Employed" counts to calculate proportions for each of the NOCs, to give us an indication of first occupations for inter-provincial migrants.
 
+```{r}
+canada_noc_props|>
+  slice_max(prop, n=10)|>
+  ggplot(aes(prop, fct_reorder(desc, prop)))+
+  geom_col()+
+  labs(title="Top NOCs for interprovincial.",
+       x="Proportion",
+       y=NULL)+
+  theme_minimal()
+```
+
 
 For immigrants, we make use of Statistics Canada Census table [98-10-0316-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810031601), and apply filters GEO=="Canada", admission category=="total", highest certificate=="total", age=="total", gender=="total", period of immigration=="2016-2021". We then calculate proportions for each of the NOCs, to give us an indication of first occupations for immigrants.
+
+```{r}
+immigrant_noc_props|>
+  slice_max(prop, n=10)|>
+  ggplot(aes(prop, fct_reorder(desc, prop)))+
+  geom_col()+
+  labs(title="Top NOCs for Immigrants.",
+       x="Proportion",
+       y=NULL)+
+  theme_minimal()
+```
+
+
 
 ## By TEER
 
@@ -697,7 +737,7 @@ output$entrant_flow <- renderPlot(
      geom_rect(aes(xmin = min(forecast_years), xmax = max(forecast_years), ymin = -Inf, ymax = Inf),
             fill = "grey", colour="grey") +
     geom_line()+
-    scale_y_continuous(labels=scales::comma)+
+    scale_y_continuous(labels=scales::comma, limits=c(40000,60000))+
     scale_x_continuous(limits=c(max(forecast_years)-20, max(forecast_years)))+
     labs(subtitle=paste0("BC residents turning ",input$working_age),
           caption="source: https://bcstats.shinyapps.io/popApp/",
