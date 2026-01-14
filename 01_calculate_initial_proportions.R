@@ -17,12 +17,13 @@ census_weight <- 0.789473684 #long form 2021 census covered 4.8M workers, NINE y
 base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
 base_plus <- 5:15 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
 budget_weight <- .62 #our forecast grows at a weighted average of the historic growth and the budget growth rate.
+bc_emp_rate <- .81 #the proportion of working age that are employed.
 #functions-----------------------
 
 regress <- function(tbbl) {
   max_year <- max(tbbl$year)
   year_term <- lm(log(employment+1) ~ year, data=tbbl)|>
-    tidy()|>
+    broom::tidy()|>
     filter(term=="year")
   data=tibble(year=(max_year+1):(max_year+11))
   tibble(slope=year_term$estimate, var=year_term$std.error^2, forecast=list(data))
@@ -151,19 +152,30 @@ bc <- lfs|>
 bc_with_cagr <- bc|>
   mutate(cagr=(employment[year==max(year)]/employment[year==(max(year)-10)])^.1-1)
 
+#' we are going to use working age population to form our employment forecast that
+#' extends beyond the finance forecast.
+
+our_range <- (max(budget$year)+1):(max(budget$year)+6)
+
+our_forecast <- read_csv(here("data",
+                             "supply_side",
+                             "Population_Projections.csv"))|>
+  filter(Region.Name=="British Columbia",
+         Gender=="T")|>
+  select(-contains("region"), -Type, -Gender, -Total)|>
+  pivot_longer(cols=-Year, names_to = "age", values_to = "employment")|>
+  filter(age %in% 15:64,
+         Year %in% our_range
+  )|>
+  group_by(year=Year)|>
+  summarize(employment=sum(employment)*bc_emp_rate)|>
+  mutate(series="our forecast",
+         cagr=NA_real_) #user will be able to alter slope, so delay cagr calculation
+
 bc_slope <- lm(log(employment)~year, data=bc)|>
   broom::tidy()|> #the estimated growth factor for this series
   filter(term=="year")|>
   pull(estimate)
-
-bc_growth_factor <- exp(bc_slope)
-our_forecast_growth_factor=(1-budget_weight)*bc_growth_factor+budget_weight*(1+budget$cagr[[1]])
-
-our_forecast <- tibble(year=(max(budget$year)+1):(max(budget$year)+6))|>
-  mutate(employment=tail(budget$employment, n=1)*our_forecast_growth_factor^(year-max(budget$year)),
-         series="our forecast",
-         cagr=NA_real_ #user will be able to alter slope, so delay cagr calculation
-  )
 
 bc_forecast <- our_forecast|>
   bind_rows(bc_with_cagr, budget)|>
@@ -340,6 +352,7 @@ agg_and_save(lfs_no_aggregates, noc_5)
 weighted_shares <- full_join(lfs_shares, census_shares)|>
   mutate(across(where(is.numeric), ~replace_na(.x, 0)),
          pre_mod_share=(1-census_weight)*lfs_share+census_weight*census_share)
+
 
 write_rds(weighted_shares, here("out", "unmodified_shares.rds"))
 write_rds(weighted_shares, here("out","modified","shares.rds"))

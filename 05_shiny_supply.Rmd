@@ -104,7 +104,6 @@ fourteen <- read_csv(here("data",
   mutate(age=14, 
          pop=`14`)|>
   select(ref_date=Year,age, pop)
-  
 
 #table 14100327 provides participation rate for both BC and Canada. 
 can_bc_part_rates <- vroom(here("data", "supply_side", "14100327.csv"))
@@ -335,7 +334,7 @@ stokes_total <- read_excel(here("data",
   pivot_longer(cols=everything(), values_to = "stokes (previous)")
 ```
 
-## Caveat Emptor
+## Caveat Comedens
 
 > Econometric theory is like an exquisitely balanced French recipe, spelling out precisely with how many turns to mix the sauce, how many carats of spice to add, and for how many milliseconds to bake the mixture at exactly 474 degrees of temperature. But when the statistical cook turns to raw materials, he finds that hearts of cactus fruit are unavailable, so he substitutes chunks of cantaloupe; where the recipe calls for vermicelli he uses shredded wheat; and he substitutes green garment dye for curry, ping-pong balls for turtle's eggs and, for Chalifougnac vintage 1883, a can of turpentine". 
 >

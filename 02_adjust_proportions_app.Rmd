@@ -32,7 +32,7 @@ conflicts_prefer(plotly::layout)
 cagr_horizon <- 10
 options(scipen = 999)
 #functions--------------------------------------
-margin_plot <- function(tbbl, tbbl2, margin){
+margin_plot <- function(tbbl, tbbl2, margin, title){
   plt <- ggplot()+
     geom_point(data=tbbl2, 
                mapping=aes(year, 
@@ -64,7 +64,8 @@ margin_plot <- function(tbbl, tbbl2, margin){
                             historic_cagr
                             )))+
     facet_wrap(~ get(margin), scales = "free_y")+
-    labs(x=NULL,
+    labs(title=title,
+      x=NULL,
          y=NULL)+
     theme_minimal()+
     theme(text=element_text(size=13),
@@ -119,7 +120,8 @@ occ_plot <- function(pg){
                     )
                 )+
       facet_wrap(~noc_5, scales = "free_y")+
-      labs(x=NULL,
+      labs(title="Occupation time plots (aggregated across region and industry)",
+        x=NULL,
            y=NULL)+
       theme_minimal()+
       theme(text=element_text(size=13),
@@ -131,6 +133,10 @@ occ_plot <- function(pg){
 }
 
 # read in the data----------------------------
+industry_mapping <- readxl::read_excel(here("data", "mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
+  select(aggregate_industry, lmo_ind_code)|>
+  distinct()|>
+  filter(!str_detect(lmo_ind_code, "Total"))
 for_shrinkage_plot <- read_rds(here("out","for_shrinkage_plot.rds"))
 mod_shares <-  read_rds(here("out","modified","shares.rds")) #forecast shares, overwritten on each save
 bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus 6 years.
@@ -161,6 +167,14 @@ noc_pages <- occupation_historic|> #by NOC aggregates need to be split across mu
 
 region_census <- read_rds(here("out","census_region.rds"))
 industry_census <- read_rds(here("out","census_industry.rds"))
+
+aggregate_census <- industry_census|>
+    left_join(industry_mapping, by=join_by("lmo_ind_code"))|>
+    group_by(year, aggregate_industry, series)|>
+    summarize(employment=sum(employment))
+
+
+
 occupation_census <- read_rds(here("out","census_occupation.rds"))|>
   left_join(noc_descriptions)|>
   arrange(noc_5)|>
@@ -194,9 +208,9 @@ occupation_historic_cagrs <- occupation_historic|>
 
 ```{r}
 
-sliderInput("bc_slope", "Change BC slope",
+sliderInput("bc_shift", "Shift BC employment forecast",
   min = .99, max = 1.01,
-  value = 1, step = .0001
+  value = 1, step = .001
 )
 
 # shiny inputs defined here
@@ -250,7 +264,7 @@ bc_reactive <- reactive({
     pull()
   modified <- bc_fcast|>
     mutate(employment=if_else(series=="our forecast", 
-                              employment*input$bc_slope^(year-last_year_of_budget), 
+                              employment*input$bc_shift, 
                               employment))
   lfs_and_finance <- modified|>
     filter(series %in% c("LFS", "budget forecast"))
@@ -392,7 +406,7 @@ observeEvent(input$save, {
 
 # BC
 
-### BC time plot
+### 
 
 ```{r}
 plotly::renderPlotly({
@@ -413,14 +427,15 @@ plotly::renderPlotly({
   geom_line()+
   theme_minimal()+
   scale_y_continuous(labels = scales::comma)+
-  labs(x=NULL, y=NULL, colour=NULL)
+  labs(title="BC time plot (aggregated across region, industry, occupation)",
+    x=NULL, y=NULL, colour=NULL)
 ggplotly(plt, tooltip = "text")
 })
 ```
 
 # Region
 
-### Regional time plot
+### 
 
 ```{r, fig.retina=2}
 renderPlotly({
@@ -431,13 +446,15 @@ renderPlotly({
     full_join(regional_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
     full_join(regional_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
     full_join(regional_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
-    margin_plot(region_census, "bc_region")
+    margin_plot(region_census, "bc_region", "Regional time plots (aggregated across industry and occupation)")
 })
 ```
 
 # Industry
 
-### Industry time plot
+## Row {.tabset}
+
+### LMO 63 Industries
 
 ```{r, fig.retina=2}
 renderPlotly({
@@ -448,9 +465,37 @@ renderPlotly({
     full_join(industry_mod_cagrs()|>mutate(mod_cagr=scales::percent(mod_cagr, accuracy=.1)))|>
     full_join(industry_pre_cagrs()|>mutate(pre_cagr=scales::percent(pre_cagr, accuracy=.1)))|>
     full_join(industry_historic_cagrs|>mutate(historic_cagr=scales::percent(historic_cagr, accuracy=.1)))|>
-    margin_plot(industry_census, "lmo_ind_code")
+    margin_plot(industry_census, "lmo_ind_code", "LMO 63 Industry time plots (aggregated across region and occupation)")
 })
 ```
+
+### Aggregate Industries
+
+```{r, fig.retina=2}
+renderPlotly({
+  req(input$margin)
+  req(input$item)
+ 
+  bind_rows(industry_historic, post_mod_industry(), pre_mod_industry())|>
+    left_join(industry_mapping, by=join_by("lmo_ind_code"))|>
+    group_by(year, aggregate_industry, series)|>
+    summarize(employment=sum(employment))|>
+    ggplot()+
+    geom_point(data=aggregate_census, mapping = aes(year, employment), alpha=.5)+
+    geom_line(mapping= aes(year, employment, colour=series))+
+    facet_wrap(~aggregate_industry, scales="free_y")+
+    theme_minimal()+
+    labs(x=NULL,
+         y=NULL)+
+    theme_minimal()+
+    theme(text=element_text(size=8),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank())
+})
+```
+
 
 # Occupation
 
@@ -694,23 +739,50 @@ Column
 
 ### Buckle up... its time to get Baysian
 
--   Obviously the composition of the BC labour market is not fixed: Next we describe how we model the evolution of the proportions over time.
--  We first estimate the growth rate of BC as a whole by fitting this model:
+-  Next we describe how we model the evolution of employment shares over time.
 
-$$ log(Employment+1) \sim year+\epsilon$$
+-  We first estimate the growth rate of BC as a whole by fitting the model
+\[
+\log(\text{Employment} + 1) = \alpha + \beta\,\text{year} + \varepsilon .
+\]
 
--  The slope coefficient from this regression $\hat{\beta}_{BC}$ will serve as our prior belief: what we would expect in the absence of any other information. 
--  We slice BC into 7 regions, 63 industries and 512 occupations: 582 slices of BC's labour market.
--  We fit the above model to each slice, yielding 582 slope coefficients $\hat{\beta_s}$, and their standard errors $SE(\hat{\beta}_s)$.
--  The question is how convincing is each slice's slope estimate? i.e. How much should we update our prior belief?
--  Two things determine the extent to which we update our beliefs: 
-    1) $(SE(\hat{\beta}_s))^2$, a measure of the noise around the trend for a given slice.  
-    2) $\tau^2=var(\hat{\beta}_s-\hat{\beta}_{BC})$, a measure of how much slope variation there is *between* the slices.
--  If a slice's slope is estimated precisely and there is a lot of variability between slices then we basically ignore the prior (yellow areas in heatmap to right).
--  If a slice's slope is estimated imprecisely and there is not much variability between slices then we weight the prior heavily (purple areas in heatmap to right).
--  Specifically, we create a weighted average of the prior and the slice's slope estimate, where the weight on $\hat{\beta}_s$ is
+-  Adding 1 ensures the logarithm is defined if employment=0.
 
-$$w_{\hat{\beta}_s}=\frac{\tau^2}{\tau^2 + (SE(\hat{\beta}_s))^2}$$
+-  The slope coefficient $\hat{\beta}_{BC}$ serves as our prior belief about growth—what we would expect in the absence of any slice-specific information.
+
+-  We then estimate separate trends for the 7 regions, 63 industries, and 512 occupations. 
+
+-  For each slice $s$, we obtain a slope estimate $\hat{\beta}_{s}$ and its standard error $SE(\hat{\beta}_{s})$.
+
+-  The question is: how convincing is each slice’s estimated trend? In other words, how much should we update our prior belief?
+
+-  Two quantities govern the update: the sampling variance of the slice trend
+
+\[
+(SE(\hat{\beta}_{s}))^{2},
+\]
+
+and the cross-slice variance in trends *within* a group (e.g. region).
+
+\[
+\tau^{2} = \mathrm{Var}(\hat{\beta}_{s} - \hat{\beta}_{BC}),
+\]
+
+
+-  If a slice’s slope is estimated precisely and there is substantial heterogeneity across slices, we rely mostly on the slice estimate (yellow areas in the heatmap). 
+
+-  If a slice’s slope is imprecise and there is little heterogeneity across slices, we shrink strongly toward the BC-wide trend (purple areas).
+
+-  Formally, the posterior (shrunk) slope for slice $s$ is
+
+\[
+\tilde{\beta}_{s} = w_s \hat{\beta}_{s} + (1 - w_s)\hat{\beta}_{BC},
+\]
+where the weight on the slice estimate is
+\[
+w_s = \frac{\tau^{2}}{\tau^{2} + (SE(\hat{\beta}_{s}))^{2}} .
+\]
+
 
 
 Column {.tabset}
