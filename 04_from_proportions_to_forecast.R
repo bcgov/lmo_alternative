@@ -11,13 +11,13 @@ replacement_adjustment <- 13.2 #increase this to make replacement demand go down
 #read in data-----------------
 mapping <- read_excel(here("data","mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
   select(naics=naics_5, lmo_detailed_industry)
-mod_shares <- read_rds(here("out","modified", "shares.rds")) #the shares after adjustment
+shares_post_driver <- read_rds(here("out","modified", "shares_post_driver.rds")) #the shares after driver adjustment
 bc_fcast <- read_rds(here("out","modified", "bc_forecast.rds")) #the top level forecast after adjustment
 
 # start by calculating employment and difference in employment----------------
-emp_and_diff <- left_join(mod_shares, bc_fcast, by = join_by(year))|>
-  mutate(employment=employment*pre_mod_share)|>
-  select(-pre_mod_share, -series)|>
+emp_and_diff <- left_join(shares_post_driver, bc_fcast, by = join_by(year))|>
+  mutate(employment=employment*post_mod_share)|>
+  select(-post_mod_share, -series)|>
   group_by(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
   mutate(emp_diff=c(NA_real_, diff(employment)))
 
@@ -133,4 +133,6 @@ richs_forecast <- left_join(emp_and_diff, expand_ratio)|>
          expansion_demand,
          replacement_demand)
 
+
+#need to copy this over to new_industry_forecast, compare_excel, 4cast_viewer_comparison.
 write_rds(richs_forecast, here("out","richs_forecast.rds"))

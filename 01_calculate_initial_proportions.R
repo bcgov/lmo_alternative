@@ -14,10 +14,9 @@ conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 #constants---------------------
 census_weight <- 0.789473684 #long form 2021 census covered 4.8M workers, NINE years of LFS covered 1.28M (distinct) workers.
-base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add years on both sides to keep centered on 2021, until 2026 census available in 2027)
+base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add 1 year on both sides to keep centered on 2021, until 2026 census available...  2028 forecast???)
 base_plus <- 5:15 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
-budget_weight <- .62 #our forecast grows at a weighted average of the historic growth and the budget growth rate.
-bc_emp_rate <- .81 #the proportion of working age that are employed.
+bc_emp_rate <- .81 #the proportion of 15-64 year olds that are employed.
 #functions-----------------------
 
 regress <- function(tbbl) {
@@ -45,7 +44,6 @@ agg_and_save <- function(tbbl, var1, var2=NULL){
 get_size <- function(tbbl){
   mean(tbbl$employment)
 }
-
 
 #read in mapping files----------------------
 mapping <- read_excel(here("data", "mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
@@ -170,10 +168,11 @@ our_forecast <- read_csv(here("data",
   group_by(year=Year)|>
   summarize(employment=sum(employment)*bc_emp_rate)|>
   mutate(series="our forecast",
-         cagr=NA_real_) #user will be able to alter slope, so delay cagr calculation
+         cagr=NA_real_) #user will be able to alter, so delay cagr calculation
 
+#bc_slope serves as our prior for the empirical baysian shrinkage
 bc_slope <- lm(log(employment)~year, data=bc)|>
-  broom::tidy()|> #the estimated growth factor for this series
+  broom::tidy()|>
   filter(term=="year")|>
   pull(estimate)
 
@@ -181,19 +180,20 @@ bc_forecast <- our_forecast|>
   bind_rows(bc_with_cagr, budget)|>
   arrange(year)
 
-#' BASELINE LFS SHARES: (2017:2025)------------
+#' BASELINE LFS SHARES: (for base_years) ------------
 
 lfs_base_share <- lfs|>
-  filter(year %in% base_years, #note that some NOCs have either missing or zero employment for the base years
+  filter(year %in% base_years,
          !is.na(bc_region),
          !is.na(noc_5),
          lmo_detailed_industry!="Total, All Industries"
          )|>
   group_by(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)|>
-  summarize(employment=sum(employment))|>
+  summarize(employment=sum(employment))|> #sum treats implicit missing employment same as 0s
   ungroup()|>
   mutate(base_share=employment/sum(employment))|>
-  filter(base_share>0)
+  filter(base_share>0)|>
+  arrange(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry)
 
 #REGIONAL GROWTH FACTORS----------------
 regional_factor <- lfs|>
@@ -353,8 +353,6 @@ weighted_shares <- full_join(lfs_shares, census_shares)|>
   mutate(across(where(is.numeric), ~replace_na(.x, 0)),
          pre_mod_share=(1-census_weight)*lfs_share+census_weight*census_share)
 
-
-write_rds(weighted_shares, here("out", "unmodified_shares.rds"))
 write_rds(weighted_shares, here("out","modified","shares.rds"))
 write_rds(bc_forecast, here("out","modified","bc_forecast.rds"))
 tictoc::toc()

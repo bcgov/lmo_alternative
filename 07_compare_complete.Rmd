@@ -226,7 +226,6 @@ occ_lfs <- read_rds(here("out","historic_noc_5.rds"))|>
   select(noc_5, year, value=employment)|>
   inner_join(noc_names)
 
-
 ind_lfs_file <- here("data","Employment for 64 LMO Industries 2000-2024.xlsx")
 
 ind_lfs <- excel_sheets(ind_lfs_file) %>%

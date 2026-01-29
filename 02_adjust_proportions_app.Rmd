@@ -173,8 +173,6 @@ aggregate_census <- industry_census|>
     group_by(year, aggregate_industry, series)|>
     summarize(employment=sum(employment))
 
-
-
 occupation_census <- read_rds(here("out","census_occupation.rds"))|>
   left_join(noc_descriptions)|>
   arrange(noc_5)|>
@@ -680,7 +678,7 @@ renderPlotly({
 
 #### Potential Benefits
 
-- Forecast would be available within 10 minutes of budget numbers being released.
+- Forecast would be available on Budget day.
 - It could be used in early stakeholder consultations: e.g. "This is our first cut forecast for your industry (and top occupations within), what do you think?"
 - It could serve as a point of reference for the numerous Stokes model cuts.
 - Unlike the Stokes model, where we are increasingly constrained (e.g. we can't change this without messing up that), any dimension can be changed at any point, and the model rebalances to respect the top level constraint.  
