@@ -1,0 +1,42 @@
+file: 2025_98100449.csv
+sha256: 096bba021c323e318865e22c76e9887eee6cfdce0a632e57414f94d422c2f277
+size_bytes: 1.9000395e+10
+n_rows: .na.integer
+n_cols: 15
+col_names:
+- REF_DATE
+- GEO
+- DGUID
+- '"Highest certificate'
+- diploma or degree (16)"
+- Age (15A)
+- Gender (3)
+- Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)
+- Coordinate
+- Labour force status (3):Total - Labour force status[1]
+- Symbol
+- Labour force status (3):Employed[2]
+- Symbol_1
+- Labour force status (3):Unemployed[3]
+- Symbol_2
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:36:39.108625
+semantic_name: 98100449.csv
+provenance:
+  source_zip: 2025_98100449.zip
+  original_file: 98100449.csv

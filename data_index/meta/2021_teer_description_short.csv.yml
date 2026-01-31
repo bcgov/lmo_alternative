@@ -1,0 +1,14 @@
+file: 2021_teer_description_short.csv
+sha256: da694f6fe150ae32c676b76ae12ea8bf25995cfd02317a651816a0e84544d42d
+size_bytes: 211.0
+n_rows: .na.integer
+n_cols: 2
+col_names:
+- '"teer"'
+- '"data"'
+col_types:
+- unknown
+- unknown
+created: 2026-01-30 11:47:17.375564
+semantic_name: teer_description_short.csv
+provenance: ~

@@ -1,0 +1,64 @@
+file: 2025_98100316.csv
+sha256: e01c6d081a8981fef869792a246e199642a545d24568061a73935f3d05422fab
+size_bytes: 1.4464288e+10
+n_rows: .na.integer
+n_cols: 26
+col_names:
+- REF_DATE
+- GEO
+- DGUID
+- Admission category and applicant type (35)
+- '"Highest certificate'
+- diploma or degree (7)"
+- Age (8C)
+- Gender (3)
+- Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)
+- Coordinate
+- Period of immigration (8A):Total - Period of immigration[1]
+- Symbol
+- Period of immigration (8A):Before 1980[2]
+- Symbol_1
+- Period of immigration (8A):1980 to 1990[3]
+- Symbol_2
+- Period of immigration (8A):1991 to 2000[4]
+- Symbol_3
+- Period of immigration (8A):2001 to 2010[5]
+- Symbol_4
+- Period of immigration (8A):2011 to 2021[6]
+- Symbol_5
+- Period of immigration (8A):2011 to 2015[7]
+- Symbol_6
+- Period of immigration (8A):2016 to 2021[8]
+- Symbol_7
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-30 15:20:57.925589
+semantic_name: 98100316.csv
+provenance:
+  source_zip: 2025_98100316.zip
+  original_file: 98100316.csv

@@ -1,0 +1,22 @@
+file: 2021_noc_classification_structure.csv
+sha256: 6e860a3f3eec82ff08751baeb14f9abe1dff8b4e89ed97c5a66fe32d8b33ac87
+size_bytes: 394746.0
+n_rows: .na.integer
+n_cols: 6
+col_names:
+- Level
+- Hierarchical structure
+- Code - NOC 2021 V1.0
+- Class title
+- Class definition
+- ''
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-30 11:47:17.35721
+semantic_name: noc_classification_structure.csv
+provenance: ~

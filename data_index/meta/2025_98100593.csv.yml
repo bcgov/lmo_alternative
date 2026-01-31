@@ -1,0 +1,58 @@
+file: 2025_98100593.csv
+sha256: b4f39db6a717f60b11a46237ee317119f39cf2ce4b2a6634793f89d4605989ac
+size_bytes: 1.2481562e+10
+n_rows: .na.integer
+n_cols: 23
+col_names:
+- REF_DATE
+- GEO
+- DGUID
+- Statistics (3)
+- Labour force status (3)
+- Age (15A)
+- Gender (3)
+- Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)
+- Coordinate
+- Class of worker (7A):Total - Class of worker[1]
+- Symbol
+- Class of worker (7A):Class of worker - not applicable[2]
+- Symbol_1
+- Class of worker (7A):All classes of workers[3]
+- Symbol_2
+- Class of worker (7A):Employee[4]
+- Symbol_3
+- Class of worker (7A):Self-employed[5]
+- Symbol_4
+- Class of worker (7A):Self-employed[6]
+- Symbol_5
+- Class of worker (7A):Unpaid family worker[7]
+- Symbol_6
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:37:58.238589
+semantic_name: 98100593.csv
+provenance:
+  source_zip: 2025_98100593.zip
+  original_file: 98100593.csv

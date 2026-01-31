@@ -1,0 +1,20 @@
+file: RTRA2035185_stat0610p2.csv
+sha256: 4b204d71d68746dc8fdb79b0325f84c253efd60862437c9b2f6d4e2f7a98dee2
+size_bytes: 1.4535247e+08
+n_rows: .na.integer
+n_cols: 5
+col_names:
+- SYEAR
+- BC_REGION
+- NAICS_5
+- NOC_5
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 17:03:07.258767
+semantic_name: stat0610p2.csv
+provenance: ~

@@ -1,0 +1,42 @@
+file: 2025_supply_demand.xlsx
+sha256: 7db3e77ba12d7a7f42e876168a0f4e6e3c9d7bd98a4663a40a349666e590ce09
+size_bytes: 5429138.0
+n_rows: .na.integer
+n_cols: 16
+col_names:
+- 4CastExporter
+- Tue Jul 22 10:53:03 2025
+- '...3'
+- '...4'
+- '...5'
+- '...6'
+- '...7'
+- '...8'
+- '...9'
+- '...10'
+- '...11'
+- '...12'
+- '...13'
+- '...14'
+- '...15'
+- '...16'
+col_types:
+- character
+- character
+- character
+- character
+- character
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+- numeric
+created: 2026-01-30 15:34:13.67835
+semantic_name: supply_demand.xlsx
+provenance: ~

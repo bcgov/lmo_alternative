@@ -1,0 +1,235 @@
+file: 2021_census_Northeast.csv
+sha256: d908325cb93c7b043b8c583392881564611a6b583439bc6ed815a805894690a8
+size_bytes: 790528.0
+n_rows: .na.integer
+n_cols: 112
+col_names:
+- NOC (821)
+- Total - Industry - Groups - North American Industry Classification System (NAICS)
+  2017
+- Industry - not applicable
+- All industries
+- '"    11 Agriculture'
+- forestry
+- fishing and hunting"
+- 111-112 Farms
+- '"        1110 Farms (except greenhouses'
+- nurseries
+- floriculture and aquaculture)"
+- '"        1114 Greenhouse'
+- nursery and floriculture production"
+- 1125 Aquaculture
+- 113 Forestry and logging
+- 1131 Timber tract operations
+- 1132 Forest nurseries and gathering of forest products
+- 1133 Logging
+- '"      114 Fishing'
+- hunting and trapping"
+- 1141 Fishing
+- 1142 Hunting and trapping
+- 115 Support activities for agriculture and forestry
+- 1150 Support activities for farms (1151 to 1152)
+- 1153 Support activities for forestry
+- '"    21 Mining'
+- quarrying
+- and oil and gas extraction"
+- 211 Oil and gas extraction
+- 2111 Oil and gas extraction
+- 212 Mining and quarrying (except oil and gas)
+- 2121 Coal mining
+- 2122 Metal ore mining
+- 2123 Non-metallic mineral mining and quarrying
+- '"      213 Support activities for mining'
+- and oil and gas extraction"_1
+- '"        2131 Support activities for mining'
+- and oil and gas extraction"_2
+- 22 Utilities
+- 221 Utilities
+- '"        2211 Electric power generation'
+- transmission and distribution"
+- 2212 Natural gas distribution
+- '"        2213 Water'
+- sewage and other systems"
+- 23 Construction
+- 236 Construction of buildings
+- 2361 Residential building construction
+- 2362 Non-residential building construction
+- 237 Heavy and civil engineering construction
+- 2371 Utility system construction
+- 2372 Land subdivision
+- '"        2373 Highway'
+- street and bridge construction"
+- 2379 Other heavy and civil engineering construction
+- 238 Specialty trade contractors
+- '"        2381 Foundation'
+- structure
+- and building exterior contractors"
+- 2382 Building equipment contractors
+- 2383 Building finishing contractors
+- 2389 Other specialty trade contractors
+- 31-33 Manufacturing
+- 311 Food manufacturing
+- 3111 Animal food manufacturing
+- 3112 Grain and oilseed milling
+- 3113 Sugar and confectionery product manufacturing
+- 3114 Fruit and vegetable preserving and specialty food manufacturing
+- 3115 Dairy product manufacturing
+- 3116 Meat product manufacturing
+- 3117 Seafood product preparation and packaging
+- 3118 Bakeries and tortilla manufacturing
+- 3119 Other food manufacturing
+- 312 Beverage and tobacco product manufacturing
+- 3121 Beverage manufacturing
+- 3122 Tobacco manufacturing
+- 3123 Cannabis product manufacturing
+- 313 Textile mills
+- '"        3131 Fibre'
+- yarn and thread mills"
+- 3132 Fabric mills
+- 3133 Textile and fabric finishing and fabric coating
+- 314 Textile product mills
+- 3141 Textile furnishings mills
+- 3149 Other textile product mills
+- 315 Clothing manufacturing
+- 3151 Clothing knitting mills
+- 3152 Cut and sew clothing manufacturing
+- 3159 Clothing accessories and other clothing manufacturing
+- 316 Leather and allied product manufacturing
+- 3161 Leather and hide tanning and finishing
+- 3162 Footwear manufacturing
+- 3169 Other leather and allied product manufacturing
+- 321 Wood product manufacturing
+- 3211 Sawmills and wood preservation
+- '"        3212 Veneer'
+- plywood and engineered wood product manufacturing"
+- 3219 Other wood product manufacturing
+- 322 Paper manufacturing
+- '"        3221 Pulp'
+- paper and paperboard mills"
+- 3222 Converted paper product manufacturing
+- 323 Printing and related support activities
+- 3231 Printing and related support activities
+- 324 Petroleum and coal product manufacturing
+- 3241 Petroleum and coal product manufacturing
+- 325 Chemical manufacturing
+- 3251 Basic chemical manufacturing
+- '"        3252 Resin'
+- synthetic rubber
+- and artificial and synthetic fibres and filaments manufacturing"
+- '"        3253 P'
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 17:03:05.183983
+semantic_name: census_Northeast.csv
+provenance: ~

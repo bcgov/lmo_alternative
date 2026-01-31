@@ -1,0 +1,20 @@
+file: RTRA9749683_stat1115p1.csv
+sha256: 1a869bd1a7cbd9e0c3b0dbee0e4a856bf70f98a63bc21c109558f387cf4e8c33
+size_bytes: 1.0806513e+08
+n_rows: .na.integer
+n_cols: 5
+col_names:
+- SYEAR
+- BC_REGION
+- NAICS_5
+- NOC_5
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 17:03:11.732592
+semantic_name: stat1115p1.csv
+provenance: ~

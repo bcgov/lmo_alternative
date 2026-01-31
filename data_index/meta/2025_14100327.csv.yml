@@ -1,0 +1,46 @@
+file: 2025_14100327.csv
+sha256: df055b7953dace1f8a40224ec42e9ebe0496b363b3eb77e68c46720d9fac620c
+size_bytes: 7.2358901e+07
+n_rows: .na.integer
+n_cols: 17
+col_names:
+- '"REF_DATE"'
+- '"GEO"'
+- '"DGUID"'
+- '"Labour force characteristics"'
+- '"Gender"'
+- '"Age group"'
+- '"UOM"'
+- '"UOM_ID"'
+- '"SCALAR_FACTOR"'
+- '"SCALAR_ID"'
+- '"VECTOR"'
+- '"COORDINATE"'
+- '"VALUE"'
+- '"STATUS"'
+- '"SYMBOL"'
+- '"TERMINATED"'
+- '"DECIMALS"'
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:33:59.188401
+semantic_name: 14100327.csv
+provenance:
+  source_zip: 2025_14100327.zip
+  original_file: 14100327.csv

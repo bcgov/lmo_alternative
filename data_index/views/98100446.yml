@@ -1,0 +1,5 @@
+preferred: parquet
+raw: /home/rich/1Documents/1psfs/lmo_alternative/data/data_pond/2025_98100446.csv
+parquet: /home/rich/1Documents/1psfs/lmo_alternative/data/data_parquet/2025_98100446.parquet
+updated: 2026-01-30 14:22:54
+

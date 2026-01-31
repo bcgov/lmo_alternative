@@ -18,6 +18,13 @@ base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add 1 year
 base_plus <- 5:15 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
 bc_emp_rate <- .81 #the proportion of 15-64 year olds that are employed.
 #functions-----------------------
+source(here("..","shared_functions", "pond_utilities.R"))
+
+get_region <- function(path) {
+  x <- basename(path)
+  x <- tools::file_path_sans_ext(x)
+  sub("^.*_", "", x)
+}
 
 regress <- function(tbbl) {
   max_year <- max(tbbl$year)
@@ -46,10 +53,10 @@ get_size <- function(tbbl){
 }
 
 #read in mapping files----------------------
-mapping <- read_excel(here("data", "mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
+mapping <- read_excel(resolve_current("industry_mapping_with_stokes_agg.xlsx"))|>
   select(naics_5, lmo_detailed_industry, lmo_ind_code)
 
-lmo_nocs <-read_csv(here("data", "mapping", "noc21descriptions.csv"))|>
+lmo_nocs <-read_csv(resolve_current("noc_descriptions.csv"))|>
   select(lmo_noc)|>
   distinct()|>
   mutate(lmo_noc=as.character(lmo_noc),
@@ -57,13 +64,24 @@ lmo_nocs <-read_csv(here("data", "mapping", "noc21descriptions.csv"))|>
 
 lmo_nocs <- bind_rows(lmo_nocs, tibble(lmo_noc=NA_character_)) #add in the NA so we keep the aggregate
 
-census_mapping <- read_excel(here("data","mapping","mapping_census_to_lmo_63.xlsx"))
+census_mapping <- read_excel(resolve_current("mapping_census_to_lmo_63.xlsx"))
 
 #read in the raw data----------------------
 
-lfs <- vroom(list.files(here("data","status"),
-                        pattern = "_stat",
-                        full.names = TRUE),
+lfs_files <- c(resolve_current("stat0005p1.csv"),
+               resolve_current("stat0005p2.csv"),
+               resolve_current("stat0610p1.csv"),
+               resolve_current("stat0610p2.csv"),
+               resolve_current("stat1115p1.csv"),
+               resolve_current("stat1115p2.csv"),
+               resolve_current("stat1620p1.csv"),
+               resolve_current("stat1620p2.csv"),
+               resolve_current("stat2125p1.csv"),
+               resolve_current("stat2125p2.csv")
+               )
+
+
+lfs <- vroom(lfs_files,
              col_types = cols(SYEAR = col_double(),
                               BC_REGION = col_character(),
                               NAICS_5 = col_character(),
@@ -111,10 +129,21 @@ write_rds(lfs_no_aggregates, here("out","lfs_no_aggregates.rds"))
 
 #census data-----------------------------
 
-census <- tibble(files=list.files(here("data","census")))|>
-  mutate(paths=here("data","census", files),
-         data=map(paths, vroom))|>
-  separate(files, into = c("bc_region", "extension"), sep = "\\.")|>
+census_files <- c(resolve_current("census_Lower Mainland-Southwest.csv"),
+                  resolve_current("census_Vancouver Island and Coast.csv"),
+                  resolve_current("census_Thompson-Okanagan.csv"),
+                  resolve_current("census_Kootenay.csv"),
+                  resolve_current("census_Cariboo.csv"),
+                  resolve_current("census_Nechako.csv"),
+                  resolve_current("census_North Coast.csv"),
+                  resolve_current("census_Northeast.csv")
+                  )
+
+
+census <- tibble(paths=census_files)|>
+  mutate(data=map(paths, vroom),
+         bc_region=get_region(paths)
+         )|>
   select(bc_region, data)|>
   mutate(bc_region=if_else(bc_region=="North Coast", "North Coast & Nechako", bc_region),
          bc_region=if_else(bc_region=="Nechako", "North Coast & Nechako", bc_region)
@@ -136,7 +165,7 @@ census <- tibble(files=list.files(here("data","census")))|>
 
 #CREATE BC FORECAST---------------------------------------
 
-budget <- read_excel(here("data","constraint.xlsx"))|>
+budget <- read_excel(resolve_current("constraint.xlsx"))|>
   mutate(series="budget forecast",
          cagr=(employment[year==max(year)]/employment[year==min(year)])^(1/(max(year)-min(year)))-1
   )
@@ -155,9 +184,7 @@ bc_with_cagr <- bc|>
 
 our_range <- (max(budget$year)+1):(max(budget$year)+6)
 
-our_forecast <- read_csv(here("data",
-                             "supply_side",
-                             "Population_Projections.csv"))|>
+our_forecast <- read_csv(resolve_current("Population_Projections.csv"))|>
   filter(Region.Name=="British Columbia",
          Gender=="T")|>
   select(-contains("region"), -Type, -Gender, -Total)|>

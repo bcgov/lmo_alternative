@@ -1,0 +1,16 @@
+file: 2026_mapping_census_to_lmo_63.xlsx
+sha256: 9c514767ad245e97297694694c7073d31b207decf039fde609f1dc5af7eaa09b
+size_bytes: 11621.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- lmo_ind_code
+- lmo_detailed_industry
+- census_column_heading
+col_types:
+- character
+- character
+- character
+created: 2026-01-29 17:03:05.218221
+semantic_name: mapping_census_to_lmo_63.xlsx
+provenance: ~

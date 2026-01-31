@@ -2,17 +2,17 @@
 #' and imposes the driver forecasts as the last step in the employment forecast
 #' process.
 
-
 library(tidyverse)
 library(here)
 library(readxl)
 library(janitor)
 library(conflicted)
+source(here("..","shared_functions", "pond_utilities.R"))
 
 bc_forecast <- read_rds(here("out", "modified", "bc_forecast.rds"))
 modified_shares <- read_rds(here("out", "modified", "shares.rds"))
 
-industry_driver_shares <- read_excel(here("data", "driver.xlsx"))|>
+industry_driver_shares <- read_excel(resolve_current("driver.xlsx"))|>
   pivot_longer(cols=starts_with("2"), names_to = "year")|>
   clean_names()|>
   rename(lmo_detailed_industry=ind_des)|>

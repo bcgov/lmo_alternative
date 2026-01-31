@@ -1,0 +1,14 @@
+file: 2025_constraint.xlsx
+sha256: b3a17ca9a30ce773a49530638b10a57cb9c4d60b9467cd41ad74c27304d84e25
+size_bytes: 5997.0
+n_rows: .na.integer
+n_cols: 2
+col_names:
+- year
+- employment
+col_types:
+- numeric
+- numeric
+created: 2026-01-29 17:03:05.198308
+semantic_name: constraint.xlsx
+provenance: ~

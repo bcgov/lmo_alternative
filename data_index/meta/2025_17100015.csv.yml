@@ -1,0 +1,46 @@
+file: 2025_17100015.csv
+sha256: a3f9b616a49ba81a2fd17fb59524e146f13a94f538069f32a7af743cdbd92ab3
+size_bytes: 1.3099788e+08
+n_rows: .na.integer
+n_cols: 17
+col_names:
+- '"REF_DATE"'
+- '"GEO"'
+- '"DGUID"'
+- '"Gender"'
+- '"Migrants"'
+- '"Age group"'
+- '"UOM"'
+- '"UOM_ID"'
+- '"SCALAR_FACTOR"'
+- '"SCALAR_ID"'
+- '"VECTOR"'
+- '"COORDINATE"'
+- '"VALUE"'
+- '"STATUS"'
+- '"SYMBOL"'
+- '"TERMINATED"'
+- '"DECIMALS"'
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:34:02.021674
+semantic_name: 17100015.csv
+provenance:
+  source_zip: 2025_17100015.zip
+  original_file: 17100015.csv

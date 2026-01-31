@@ -35,6 +35,8 @@ knitr::opts_chunk$set(
   warning = FALSE   # hide warnings
 )
 #functions-------------------
+source(here("..","shared_functions", "pond_utilities.R"))
+
 
 alluvium_prep <- function(new_entrants, immigrants, interprovincial, noc_digit, names){
   new_entrants_ten <- new_entrants|>
@@ -73,10 +75,7 @@ alluvium_plot <- function(tbbl){
 }
 
 # get names for NOC Broad Categories and TEER levels-----------------------
-broad_names <- vroom(here("data", 
-                        "supply_side", 
-                        "noc_descriptions(keep)",
-                        "noc_2021_version_1.0_-_classification_structure.csv"))|>
+broad_names <- vroom(resolve_current("noc_classification_structure.csv"))|>
   select(noc=contains("noc"),
          desc=`Class title`,
          level= contains("Hierarchical"))|>
@@ -84,21 +83,13 @@ broad_names <- vroom(here("data",
   select(-level)|>
   mutate(noc=as.character(noc))
 
-teer_names <- read_csv(here("data", 
-                            "supply_side", 
-                            "noc_descriptions(keep)",
-                            "teer_description_short.csv"))|>
+teer_names <- read_csv(resolve_current("teer_description_short.csv"))|>
   transmute(noc=as.character(teer),
             desc=data)
 
-```
 
-
-```{r}
 #'for new entrants we use the count of 14 years olds. 
-fourteen <- read_csv(here("data",
-                        "supply_side",
-                        "Population_Projections.csv"))|>
+fourteen <- read_csv(resolve_current("Population_Projections.csv"))|>
   filter(Region.Name=="British Columbia",
          Gender=="T")|>
   mutate(age=14, 
@@ -106,7 +97,7 @@ fourteen <- read_csv(here("data",
   select(ref_date=Year,age, pop)
 
 #table 14100327 provides participation rate for both BC and Canada. 
-can_bc_part_rates <- vroom(here("data", "supply_side", "14100327.csv"))
+can_bc_part_rates <- vroom(resolve_current("14100327.csv"))
 
 #the participation rate for BC: used for new entrants.
 bc_part_rate_historic <- can_bc_part_rates|>
@@ -132,7 +123,7 @@ bc_part_rate <- bc_part_rate_historic|>
 
 
 #Table 17100015 provides Net-migration for BC. 
-inter_prov_data <- vroom(here("data", "supply_side", "17100015.csv"))|>
+inter_prov_data <- vroom(resolve_current("17100015.csv"))|>
   clean_names()|>
   filter(geo=="British Columbia",
          gender=="Total - gender",
@@ -177,7 +168,7 @@ can_part_rate <- can_part_rate_historic|>
 
 #Sources of foreign supply
 
-immigrant_data <- vroom(here("data", "supply_side", "17100014.csv"))|>
+immigrant_data <- vroom(resolve_current("17100014.csv"))|>
   clean_names()|>
   filter(geo=="British Columbia",
          gender=="Total - gender",
@@ -212,14 +203,18 @@ immigrant_data <- immigrant_data|>
   pivot_longer(cols=-ref_date)
 
 #immigrant participation rates
-immigrant_part_rate <- open_dataset(here("data", "supply_side", "98100446_parquet"))|>
-  dplyr::filter(GEO == "British Columbia",
-                `Immigrant status and period of immigration (11)`%in% c("2016 to 2021","Non-permanent residents"),
-                `Highest certificate, diploma or degree (7)`=="Total - Highest certificate, diploma or degree",
-                `Age (15A)`%in% c("15 to 24 years","25 to 64 years"),
-                `Gender (3)`=="Total - Gender",
-                `Visible minority (15)`=="Total - Visible minority",
-                `Statistics (3)`=="Count"
+
+multiple_98100446 <- list.files(here("data", "data_parquet"), pattern = "98100446", full.names = TRUE)
+most_recent_98100446 <- multiple_98100446[which.max(file.info(multiple_98100446)$mtime)]
+
+immigrant_part_rate <- open_dataset(most_recent_98100446)|>
+  dplyr::filter(geo == "British Columbia",
+                immigrant_status_and_period_of_immigration_11%in% c("2016 to 2021","Non-permanent residents"),
+                highest_certificate_diploma_or_degree_7=="Total - Highest certificate, diploma or degree",
+                age_15a%in% c("15 to 24 years","25 to 64 years"),
+                gender_3=="Total - Gender",
+                visible_minority_15=="Total - Visible minority",
+                statistics_3=="Count"
                 )|>
   select(contains("status"), contains("age"))|>
   collect()|>
@@ -240,17 +235,18 @@ immigrant_part_rate$immigrant_class[1] <- "Permanent residents"
 pr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Permanent residents"]
 npr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Non-permanent residents"]
 
-entrant_noc_props <- open_dataset(here("data",
-                                      "supply_side",
-                              "98100593_parquet"))|>
-  dplyr::filter(GEO == "British Columbia",
-                `Statistics (3)`=="Count",
-                `Labour force status (3)`=="Employed",
-                `Age (15A)`=="15 to 19 years",
-                `Gender (3)`=="Total - Gender"
+multiple_98100593 <- list.files(here("data", "data_parquet"), pattern = "98100593", full.names = TRUE)
+most_recent_98100593 <- multiple_98100593[which.max(file.info(multiple_98100593)$mtime)]
+
+entrant_noc_props <- open_dataset(most_recent_98100593)|>
+  dplyr::filter(geo == "British Columbia",
+                statistics_3=="Count",
+                labour_force_status_3=="Employed",
+                age_15a=="15 to 19 years",
+                gender_3=="Total - Gender"
                 )|>
-  dplyr::select(noc_desc=`Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)`,
-                count=`Class of worker (7A):Total - Class of worker[1]`)|>
+  dplyr::select(noc_desc=occupation_unit_group_national_occupational_classification_noc_2021_821a,
+                count=class_of_worker_7a_total_class_of_worker_1)|>
   collect()|>
   filter(str_detect(noc_desc, "\\b\\d{5}\\b"))|>
   mutate(count=as.numeric(count),
@@ -261,15 +257,16 @@ entrant_noc_props <- open_dataset(here("data",
     select(noc, desc, prop)|>
     arrange(desc(prop))
 
-canada_noc_props <- open_dataset(here("data",
-                                      "supply_side",
-                              "98100449_parquet"))|>
-  filter(GEO == "Canada",
-                `Highest certificate, diploma or degree (16)`=="Total - Highest certificate, diploma or degree",
-                `Age (15A)`=="Total - Age",
-                `Gender (3)`=="Total - Gender")|>
-  select(noc_desc=`Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)`,
-         count=`Labour force status (3):Employed[2]`
+multiple_98100449 <- list.files(here("data", "data_parquet"), pattern = "98100449", full.names = TRUE)
+most_recent_98100449 <- multiple_98100449[which.max(file.info(multiple_98100449)$mtime)]
+
+canada_noc_props <- open_dataset(most_recent_98100449)|>
+  filter(geo == "Canada",
+         highest_certificate_diploma_or_degree_16=="Total - Highest certificate, diploma or degree",
+         age_15a=="Total - Age",
+         gender_3=="Total - Gender")|>
+  select(noc_desc=occupation_unit_group_national_occupational_classification_noc_2021_821a,
+         count=labour_force_status_3_employed_2
          )|>
   collect()|>
   filter(str_detect(noc_desc, "\\b\\d{5}\\b"))|>
@@ -280,17 +277,18 @@ canada_noc_props <- open_dataset(here("data",
     )|>
     select(noc, desc, prop)|>
     arrange(desc(prop))
+############################################################
+multiple_98100316 <- list.files(here("data", "data_parquet"), pattern = "98100316", full.names = TRUE)
+most_recent_98100316 <- multiple_98100316[which.max(file.info(multiple_98100316)$mtime)]
 
-immigrant_noc_props <- open_dataset(here("data",
-                                      "supply_side",
-                              "98100316_parquet"))|>
-  filter(GEO=="Canada",
-         `Admission category and applicant type (35)`=="Total - Admission category and applicant type",
-         `Highest certificate, diploma or degree (7)`=="Total - Highest certificate, diploma or degree",
-         `Age (8C)`=="Total - Age",
-         `Gender (3)`=="Total - Gender")|>
-  select(noc_desc=`Occupation - Unit group - National Occupational Classification (NOC) 2021 (821A)`,
-         count=`Period of immigration (8A):2016 to 2021[8]`)|>
+immigrant_noc_props <- open_dataset(most_recent_98100316)|>
+  filter(geo=="Canada",
+         admission_category_and_applicant_type_35=="Total - Admission category and applicant type",
+         highest_certificate_diploma_or_degree_7=="Total - Highest certificate, diploma or degree",
+         age_8c=="Total - Age",
+         gender_3=="Total - Gender")|>
+  select(noc_desc=occupation_unit_group_national_occupational_classification_noc_2021_821a,
+         count=period_of_immigration_8a_total_period_of_immigration_1)|>
   collect()|>
   filter(str_detect(noc_desc, "\\b\\d{5}\\b"))|>
   mutate(count=as.numeric(count),
@@ -310,10 +308,7 @@ demand <- read_rds(here("out","richs_forecast.rds"))|>
   mutate(`Job Openings`=expansion_demand+replacement_demand)|>
   select(noc=noc_5, ref_date, `Job Openings`)
 
-stokes_total <- read_excel(here("data",
-                                "supply_side", 
-                                "stokes_data(replace)", 
-                                "supply_demand.xlsx"), skip=3)%>%
+stokes_total <- read_excel(resolve_current("supply_demand.xlsx"), skip=3)%>%
   pivot_longer(cols= starts_with("2"), names_to = "year", values_to = "value")%>%
   clean_names()|>
   filter(noc=="#T",

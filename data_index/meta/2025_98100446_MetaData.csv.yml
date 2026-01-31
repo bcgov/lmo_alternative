@@ -1,0 +1,36 @@
+file: 2025_98100446_MetaData.csv
+sha256: 8f4a3d8a51b8904feecd310e11a236192b5a969f0b64019b818ec562237e91db
+size_bytes: 221266.0
+n_rows: .na.integer
+n_cols: 12
+col_names:
+- '"Cube Title"'
+- '"Product Id"'
+- '"CANSIM Id"'
+- URL
+- '"Cube Notes"'
+- '"Archive Status"'
+- Frequency
+- '"Start Reference Period"'
+- '"End Reference Period"'
+- '"Total number of dimensions"'
+- Universe
+- '"Variable List"'
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:34:09.469586
+semantic_name: 98100446_MetaData.csv
+provenance:
+  source_zip: 2025_98100446.zip
+  original_file: 98100446_MetaData.csv

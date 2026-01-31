@@ -1,0 +1,66 @@
+file: 2025_98100446.csv
+sha256: 2cf8c4263bb53a573273d21fe4f7714fc93eb92a5db4d0ebc9330d1d49334c98
+size_bytes: 6.467854e+09
+n_rows: .na.integer
+n_cols: 27
+col_names:
+- REF_DATE
+- GEO
+- DGUID
+- Immigrant status and period of immigration (11)
+- '"Highest certificate'
+- diploma or degree (7)"
+- Age (15A)
+- Gender (3)
+- Statistics (3)
+- Visible minority (15)
+- Coordinate
+- Labour force status (8):Total - Labour force status[1]
+- Symbol
+- Labour force status (8):In the labour force[2]
+- Symbol_1
+- Labour force status (8):Employed[3]
+- Symbol_2
+- Labour force status (8):Unemployed[4]
+- Symbol_3
+- Labour force status (8):Not in the labour force[5]
+- Symbol_4
+- Labour force status (8):Participation rate[6]
+- Symbol_5
+- Labour force status (8):Employment rate[7]
+- Symbol_6
+- Labour force status (8):Unemployment rate[8]
+- Symbol_7
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 16:34:39.899836
+semantic_name: 98100446.csv
+provenance:
+  source_zip: 2025_98100446.zip
+  original_file: 98100446.csv

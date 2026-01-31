@@ -1,0 +1,28 @@
+file: 2025_industry_mapping_with_stokes_agg.xlsx
+sha256: 9bf9aa9c113cf0597a2bf3fab99fb13717e23a99195683d8f122e0cd56e39f19
+size_bytes: 21876.0
+n_rows: .na.integer
+n_cols: 9
+col_names:
+- naics_5
+- aggregate_industry
+- lmo_ind_code
+- lmo_detailed_industry
+- goods_vs_services
+- industry_profile_high
+- industry_profile_medium
+- industry_profile_low
+- stokes_industry
+col_types:
+- character
+- character
+- character
+- character
+- character
+- character
+- character
+- character
+- character
+created: 2026-01-29 17:03:05.210264
+semantic_name: industry_mapping_with_stokes_agg.xlsx
+provenance: ~

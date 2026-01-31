@@ -5,13 +5,6 @@ output:
     orientation: columns
     vertical_layout: fill
 runtime: shiny
-resource_files:
-- out/modified/shares.rds
-- out/bc_forecast.rds
-- out/historic_bc_region.rds
-- out/historic_lmo_ind_code.rds
-- out/historic_noc_5.rds
-- data/mapping/noc21descriptions.csv
 ---
 
 ```{r setup, include=FALSE}
@@ -32,6 +25,7 @@ conflicts_prefer(plotly::layout)
 cagr_horizon <- 10
 options(scipen = 999)
 #functions--------------------------------------
+source(here("..","shared_functions", "pond_utilities.R"))
 margin_plot <- function(tbbl, tbbl2, margin, title){
   plt <- ggplot()+
     geom_point(data=tbbl2, 
@@ -133,7 +127,7 @@ occ_plot <- function(pg){
 }
 
 # read in the data----------------------------
-industry_mapping <- readxl::read_excel(here("data", "mapping", "industry_mapping_2025_with_stokes_agg.xlsx"))|>
+industry_mapping <- readxl::read_excel(resolve_current("industry_mapping_with_stokes_agg.xlsx"))|>
   select(aggregate_industry, lmo_ind_code)|>
   distinct()|>
   filter(!str_detect(lmo_ind_code, "Total"))
@@ -144,7 +138,7 @@ regions <- unique(mod_shares$bc_region)
 industries <- sort(unique(mod_shares$lmo_ind_code))
 occupations <- sort(unique(mod_shares$noc_5))
 
-noc_descriptions <- vroom(here("data", "mapping","noc21descriptions.csv"), 
+noc_descriptions <- vroom(resolve_current("noc_descriptions.csv"), 
                           col_types = cols(noc_5 = col_character(), lmo_noc=col_character(), class_title = col_character()),
                           delim=",")|>
   select(noc_5=lmo_noc, class_title)|>

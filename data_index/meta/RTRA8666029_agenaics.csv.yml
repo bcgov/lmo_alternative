@@ -1,0 +1,16 @@
+file: RTRA8666029_agenaics.csv
+sha256: 38617289ba090784b9c270cbb12e5f03da39defe707c9f7fbfefb219f6392348
+size_bytes: 16006.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- NAICS_5
+- AGE_GROUP
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 17:03:11.261171
+semantic_name: agenaics.csv
+provenance: ~

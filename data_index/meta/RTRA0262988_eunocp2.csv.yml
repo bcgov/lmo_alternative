@@ -1,0 +1,16 @@
+file: RTRA0262988_eunocp2.csv
+sha256: 59fe2c7ac9e6141b9b3d9866a13d2186c3f3173fa895a340b0e9214050193ded
+size_bytes: 18793.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- NOC_5
+- LF_STAT
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+created: 2026-01-29 17:03:05.220138
+semantic_name: eunocp2.csv
+provenance: ~
