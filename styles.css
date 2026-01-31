@@ -1,0 +1,18 @@
+/* Narrow the sidebar */
+.quarto-sidebar {
+  width: 260px;      /* try 220–280px */
+  min-width: 260px;
+}
+
+/* Give body more room */
+.quarto-body {
+  max-width: none;
+}
+
+.small-text th {
+  font-size: 9px;
+}
+
+.small-text td {
+  font-size: 9px;
+}
