@@ -1,5 +1,6 @@
 semantic_name: agenoc2.csv
-current_file: RTRA5097999_agenoc2.csv
-sha256: 216d47b090499848b06ab30ffc2c2196c4c2228fb2e94732a425790baf92ebd3
+preferred: raw
+raw: RTRA5097999_agenoc2.csv
+parquet: ~
 meta_file: RTRA5097999_agenoc2.csv.yml
-updated: 2026-01-29 17:03:09.285259
+updated: 2026-01-31 18:48:54

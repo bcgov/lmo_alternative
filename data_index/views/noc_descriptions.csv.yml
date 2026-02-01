@@ -1,5 +1,6 @@
 semantic_name: noc_descriptions.csv
-current_file: 2021_noc_descriptions.csv
-sha256: 6961f32f38f36fbd73c486845051108eb26700ae0f7d3ba3d102fe56f62b004d
+preferred: raw
+raw: 2021_noc_descriptions.csv
+parquet: ~
 meta_file: 2021_noc_descriptions.csv.yml
-updated: 2026-01-29 17:03:05.193659
+updated: 2026-01-31 18:48:54

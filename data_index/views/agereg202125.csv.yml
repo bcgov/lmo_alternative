@@ -1,5 +1,6 @@
 semantic_name: agereg202125.csv
-current_file: RTRA8932108_agereg202125.csv
-sha256: b7b6f7727e319de12f7cce3f499c6b72cf6ff338b26461208a7bb371d3732748
+preferred: raw
+raw: RTRA8932108_agereg202125.csv
+parquet: ~
 meta_file: RTRA8932108_agereg202125.csv.yml
-updated: 2026-01-29 17:03:11.261913
+updated: 2026-01-31 18:48:54

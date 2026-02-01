@@ -1,5 +1,6 @@
 semantic_name: eureg.csv
-current_file: RTRA7973799_eureg.csv
-sha256: be3d0d9615598837c4b8ad94a5241e2dec3bb98dfb20dae38d0737456e95600c
+preferred: raw
+raw: RTRA7973799_eureg.csv
+parquet: ~
 meta_file: RTRA7973799_eureg.csv.yml
-updated: 2026-01-29 17:03:11.260313
+updated: 2026-01-31 18:48:54

@@ -1,5 +1,6 @@
 semantic_name: supply_demand.xlsx
-current_file: 2025_supply_demand.xlsx
-sha256: 7db3e77ba12d7a7f42e876168a0f4e6e3c9d7bd98a4663a40a349666e590ce09
+preferred: raw
+raw: 2025_supply_demand.xlsx
+parquet: ~
 meta_file: 2025_supply_demand.xlsx.yml
-updated: 2026-01-30 15:34:13.678837
+updated: 2026-01-31 18:48:54

@@ -1,5 +1,6 @@
 semantic_name: eunaics.csv
-current_file: RTRA9933034_eunaics.csv
-sha256: adb3f6fc0d6c2067db170dd5d1b052e4a3dadc7b18b9f8e33113d01bc04252dc
+preferred: raw
+raw: RTRA9933034_eunaics.csv
+parquet: ~
 meta_file: RTRA9933034_eunaics.csv.yml
-updated: 2026-01-29 17:03:11.746274
+updated: 2026-01-31 18:48:54

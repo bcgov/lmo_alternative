@@ -1,5 +1,6 @@
 semantic_name: Population_Projections.csv
-current_file: 2025_Population_Projections.csv
-sha256: c2dca3c0e75ba14672874cfbbefd78ab053c1e1059107edcc9ac59c487aded73
+preferred: raw
+raw: 2025_Population_Projections.csv
+parquet: ~
 meta_file: 2025_Population_Projections.csv.yml
-updated: 2026-01-29 16:37:58.642921
+updated: 2026-01-31 18:48:54

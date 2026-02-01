@@ -1,5 +1,6 @@
 semantic_name: driver.xlsx
-current_file: 2025_driver.xlsx
-sha256: 81a73e69f3ac0a003725f5902d3792560d79aed1f459e13d059021ede1479a80
+preferred: raw
+raw: 2025_driver.xlsx
+parquet: ~
 meta_file: 2025_driver.xlsx.yml
-updated: 2026-01-29 17:03:05.204338
+updated: 2026-01-31 18:48:54

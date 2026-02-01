@@ -1,5 +1,6 @@
 semantic_name: mapping_census_to_lmo_63.xlsx
-current_file: 2026_mapping_census_to_lmo_63.xlsx
-sha256: 9c514767ad245e97297694694c7073d31b207decf039fde609f1dc5af7eaa09b
+preferred: raw
+raw: 2026_mapping_census_to_lmo_63.xlsx
+parquet: ~
 meta_file: 2026_mapping_census_to_lmo_63.xlsx.yml
-updated: 2026-01-29 17:03:05.218474
+updated: 2026-01-31 18:48:54

@@ -204,10 +204,7 @@ immigrant_data <- immigrant_data|>
 
 #immigrant participation rates
 
-multiple_98100446 <- list.files(here("data", "data_parquet"), pattern = "98100446", full.names = TRUE)
-most_recent_98100446 <- multiple_98100446[which.max(file.info(multiple_98100446)$mtime)]
-
-immigrant_part_rate <- open_dataset(most_recent_98100446)|>
+immigrant_part_rate <- open_dataset(resolve_current("98100446.csv"))|> #no file name extension b/c parquet
   dplyr::filter(geo == "British Columbia",
                 immigrant_status_and_period_of_immigration_11%in% c("2016 to 2021","Non-permanent residents"),
                 highest_certificate_diploma_or_degree_7=="Total - Highest certificate, diploma or degree",
@@ -235,10 +232,7 @@ immigrant_part_rate$immigrant_class[1] <- "Permanent residents"
 pr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Permanent residents"]
 npr_part_rate <- immigrant_part_rate$immigrant_part_rate[immigrant_part_rate$immigrant_class=="Non-permanent residents"]
 
-multiple_98100593 <- list.files(here("data", "data_parquet"), pattern = "98100593", full.names = TRUE)
-most_recent_98100593 <- multiple_98100593[which.max(file.info(multiple_98100593)$mtime)]
-
-entrant_noc_props <- open_dataset(most_recent_98100593)|>
+entrant_noc_props <- open_dataset(resolve_current("98100593.csv"))|>
   dplyr::filter(geo == "British Columbia",
                 statistics_3=="Count",
                 labour_force_status_3=="Employed",
@@ -257,10 +251,7 @@ entrant_noc_props <- open_dataset(most_recent_98100593)|>
     select(noc, desc, prop)|>
     arrange(desc(prop))
 
-multiple_98100449 <- list.files(here("data", "data_parquet"), pattern = "98100449", full.names = TRUE)
-most_recent_98100449 <- multiple_98100449[which.max(file.info(multiple_98100449)$mtime)]
-
-canada_noc_props <- open_dataset(most_recent_98100449)|>
+canada_noc_props <- open_dataset(resolve_current("98100449.csv"))|>
   filter(geo == "Canada",
          highest_certificate_diploma_or_degree_16=="Total - Highest certificate, diploma or degree",
          age_15a=="Total - Age",
@@ -277,11 +268,8 @@ canada_noc_props <- open_dataset(most_recent_98100449)|>
     )|>
     select(noc, desc, prop)|>
     arrange(desc(prop))
-############################################################
-multiple_98100316 <- list.files(here("data", "data_parquet"), pattern = "98100316", full.names = TRUE)
-most_recent_98100316 <- multiple_98100316[which.max(file.info(multiple_98100316)$mtime)]
 
-immigrant_noc_props <- open_dataset(most_recent_98100316)|>
+immigrant_noc_props <- open_dataset(resolve_current("98100316.csv"))|>
   filter(geo=="Canada",
          admission_category_and_applicant_type_35=="Total - Admission category and applicant type",
          highest_certificate_diploma_or_degree_7=="Total - Highest certificate, diploma or degree",

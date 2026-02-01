@@ -1,5 +1,6 @@
 semantic_name: 98100593.csv
-current_file: 2025_98100593.csv
-sha256: b4f39db6a717f60b11a46237ee317119f39cf2ce4b2a6634793f89d4605989ac
+preferred: parquet
+raw: 2025_98100593.csv
+parquet: 2025_98100593.parquet
 meta_file: 2025_98100593.csv.yml
-updated: 2026-01-29 16:37:58.23953
+updated: 2026-01-31 18:48:54

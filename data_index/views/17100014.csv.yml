@@ -1,5 +1,6 @@
 semantic_name: 17100014.csv
-current_file: 2025_17100014.csv
-sha256: ef8c893dd0407f0e19b2b1aca499984d763f3795fba12080b0ad856e1d5a4381
+preferred: raw
+raw: 2025_17100014.csv
+parquet: ~
 meta_file: 2025_17100014.csv.yml
-updated: 2026-01-29 16:34:00.974498
+updated: 2026-01-31 18:48:54
