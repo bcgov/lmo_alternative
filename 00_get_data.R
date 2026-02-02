@@ -21,8 +21,8 @@ library(fs)
 library(readr)
 library(tools)
 library(dplyr)
+library(bcgovpond)
 
-source(here::here("..", "shared_functions", "pond_utilities.R"))
 path <- here::here("data_store", "add_to_pond")
 prepend <- paste0(as.numeric(format(Sys.time(),"%Y"))-1,"_")
 
@@ -72,12 +72,9 @@ results <- lapply(urls, function(u) {
   )
 })
 
-ingest_pond("data_store")
+ingest_pond()
 
 parquet_large_csvs(
-  data_pond   = "data_store/data_pond",
-  data_parquet = "data_store/data_parquet",
-  views_dir   = "data_index/views",
   min_size_mb = 250,
   chunk_size = 1000000 #make smaller if running out of ram.
 )

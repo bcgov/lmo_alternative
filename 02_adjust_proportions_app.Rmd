@@ -15,6 +15,7 @@ library(vroom)
 library(plotly)
 library(shiny)
 library(kableExtra)
+library(bcgovpond)
 library(conflicted)
 library(viridis)
 conflicts_prefer(vroom::cols)
@@ -25,7 +26,6 @@ conflicts_prefer(plotly::layout)
 cagr_horizon <- 10
 options(scipen = 999)
 #functions--------------------------------------
-source(here("..","shared_functions", "pond_utilities.R"))
 margin_plot <- function(tbbl, tbbl2, margin, title){
   plt <- ggplot()+
     geom_point(data=tbbl2, 

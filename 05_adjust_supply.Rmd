@@ -21,6 +21,7 @@ library(data.table)
 library(arrow)
 library(reactable)
 library(DT)
+library(bcgovpond)
 library(conflicted)
 conflicts_prefer(plotly::layout)
 conflicts_prefer(dplyr::filter)
@@ -35,8 +36,6 @@ knitr::opts_chunk$set(
   warning = FALSE   # hide warnings
 )
 #functions-------------------
-source(here("..","shared_functions", "pond_utilities.R"))
-
 
 alluvium_prep <- function(new_entrants, immigrants, interprovincial, noc_digit, names){
   new_entrants_ten <- new_entrants|>

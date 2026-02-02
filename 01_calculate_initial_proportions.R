@@ -6,6 +6,7 @@ library(vroom)
 library(janitor)
 library(readxl)
 library(fpp3)
+library(bcgovpond)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::lag)
@@ -18,7 +19,6 @@ base_years <- c(2017:2025) #LFS years used, centered on census 2021. (add 1 year
 base_plus <- 5:15 #base year 2021, so forecast starts some years later.(need to increment start and end each year)
 bc_emp_rate <- .81 #the proportion of 15-64 year olds that are employed.
 #functions-----------------------
-source(here("..","shared_functions", "pond_utilities.R"))
 
 get_region <- function(path) {
   x <- basename(path)

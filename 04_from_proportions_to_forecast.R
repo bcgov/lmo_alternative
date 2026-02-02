@@ -4,9 +4,10 @@ library(here)
 library(vroom)
 library(janitor)
 library(readxl)
+library(bcgovpond)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
-source(here("..","shared_functions", "pond_utilities.R"))
+
 #constants--------------------------------
 replacement_adjustment <- 13.2 #increase this to make replacement demand go down.
 #read in data-----------------
