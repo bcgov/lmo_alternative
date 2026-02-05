@@ -1,6 +1,6 @@
-file: 2021_census_North Coast.csv
-sha256: 4da8d2b4b575422e9e75f90722397b5880d9d2b3106ef98d965120d3794cd150
-size_bytes: 789896.0
+file: 2021v2_census_North Coast.csv
+sha256: e1dcd4c53a441b2347d824e04cfa2cbe91f40041c3c4b27bb4c840661ef53d66
+size_bytes: 788388.0
 n_rows: .na.integer
 n_cols: 112
 col_names:
@@ -116,7 +116,7 @@ col_names:
 - '"        3252 Resin'
 - synthetic rubber
 - and artificial and synthetic fibres and filaments manufacturing"
-- '"        3253 P'
+- '"        3253 Pest'
 col_types:
 - unknown
 - unknown
@@ -230,6 +230,6 @@ col_types:
 - unknown
 - unknown
 - unknown
-created: 2026-01-29 17:03:05.17964
+created: 2026-02-04 19:27:03.236077
 semantic_name: census_North Coast.csv
 provenance: ~

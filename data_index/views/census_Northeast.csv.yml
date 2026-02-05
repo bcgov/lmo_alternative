@@ -1,6 +1,6 @@
 semantic_name: census_Northeast.csv
 preferred: raw
-raw: 2021_census_Northeast.csv
-parquet: ~
-meta_file: 2021_census_Northeast.csv.yml
-updated: 2026-01-31 18:48:54
+raw: 2021v2_census_Northeast.csv
+meta_file: 2021v2_census_Northeast.csv.yml
+sha256: 7322807fb31ad418566d0a91182bc13c3862b90e2090c5e204d93087571e4b09
+updated: 2026-02-04 19:27:03

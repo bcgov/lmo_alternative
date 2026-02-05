@@ -1,6 +1,6 @@
 semantic_name: stat0005p1.csv
 preferred: raw
-raw: RTRA2275725_stat0005p1.csv
-parquet: ~
-meta_file: RTRA2275725_stat0005p1.csv.yml
-updated: 2026-01-31 18:48:54
+raw: RTRA9303497_stat0005p1.csv
+meta_file: RTRA9303497_stat0005p1.csv.yml
+sha256: 0f239f6e6d99545db0cbe13725dd2e9317c31876631a1b0d7c8b9d2afa5a1c0e
+updated: 2026-02-03 13:00:11

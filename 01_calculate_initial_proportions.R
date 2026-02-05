@@ -40,14 +40,6 @@ exponentiate <- function(tbbl, growth_factor){
     mutate(multiplier=growth_factor^base_plus)
 }
 
-agg_and_save <- function(tbbl, var1, var2=NULL){
-  tbbl|>
-    group_by(year, {{  var1  }}, {{  var2  }})|>
-    summarize(employment=sum(employment))|>
-    mutate(series="historic")|>
-    write_rds(here("out",paste0("historic_",as.character(substitute(var1)),".rds")))
-}
-
 get_size <- function(tbbl){
   mean(tbbl$employment)
 }
@@ -116,16 +108,37 @@ lfs <- lfs|>
   filter(!noc_5 %in% c(41220, 41221, 41229))|>
   bind_rows(reallocated)
 
-lfs_no_aggregates <- lfs|>
-  filter(!is.na(bc_region),
-         !is.na(noc_5),
-         lmo_detailed_industry!="Total, All Industries"
-  )|>
-  tsibble(index=year, key=c(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry))|>
-  tsibble::fill_gaps(employment=0, .full=TRUE)|>
-  tibble()
+# Get various lfs aggregates for the adjust_proportions_app.
 
-write_rds(lfs_no_aggregates, here("out","lfs_no_aggregates.rds"))
+lfs|>
+  filter(!is.na(bc_region), #don't include BC as a whole, only regions.
+         is.na(noc_5), #occupation aggregate
+         lmo_ind_code=="Total, All Industries")|> #industry aggregate
+  ungroup()|>
+  select(year, bc_region, employment)|>
+  mutate(series="historic")|>
+  write_rds(here("out","historic_bc_region.rds"))
+
+historic_lmo_ind_code <- lfs|>
+  filter(is.na(bc_region), #regional aggregate
+         is.na(noc_5), #occupation aggregate
+         lmo_ind_code!="Total, All Industries")|> #only lmo industry components
+  ungroup()|>
+  select(year, lmo_ind_code, lmo_detailed_industry, employment)|>
+  mutate(series="historic")
+
+write_rds(historic_lmo_ind_code, here("out","historic_lmo_ind_code.rds"))
+#need this for internal industry forecasting app.
+openxlsx::write.xlsx(historic_lmo_ind_code, here("out", paste0(Sys.time(),"_historic_lmo_ind_code.xlsx")))
+
+lfs|>
+  filter(is.na(bc_region), #regional aggregate
+         !is.na(noc_5), #only occupation components
+         lmo_ind_code=="Total, All Industries")|> #industry aggregate
+  ungroup()|>
+  select(year, noc_5, employment)|>
+  mutate(series="historic")|>
+  write_rds(here("out","historic_noc_5.rds"))
 
 #census data-----------------------------
 
@@ -139,8 +152,10 @@ census_files <- c(resolve_current("census_Lower Mainland-Southwest.csv"),
                   resolve_current("census_Northeast.csv")
                   )
 
+#'need to get census margins and cells separately... cells for proportion based forecasting,
+#'margins for internal industry plotting.
 
-census <- tibble(paths=census_files)|>
+census_with_noc_total <- tibble(paths=census_files)|>
   mutate(data=map(paths, vroom),
          bc_region=get_region(paths)
          )|>
@@ -154,11 +169,60 @@ census <- tibble(paths=census_files)|>
   pivot_longer(cols=-c(bc_region, noc_5),
                names_to = "census_column_heading",
                values_to = "employment")|>
-  mutate(noc_5 = word(noc_5, 1))|>
-  filter(employment>0,
-         str_length(noc_5) == 5,
-         noc_5!="Total"
-  )|>
+  mutate(noc_5 = trimws(word(noc_5, 1)))|>
+  filter(str_length(noc_5) == 5 | noc_5=="Total")
+
+# Get various census aggregates for the adjust_proportions_app.
+
+#census by region-----------------------------
+ census_with_noc_total|>
+  filter(noc_5=="Total",
+         census_column_heading=="Total - Industry - Groups - North American Industry Classification System (NAICS) 2017"
+         )|>
+  select(bc_region, employment)|>
+   mutate(year=2021,
+          series="census")|>
+  ungroup()|>
+  write_rds(here("out","census_region.rds"))
+
+#census by industry---------------------------
+
+census_by_industry <- census_with_noc_total|>
+  filter(noc_5=="Total")|>
+  inner_join(census_mapping)|>
+  group_by(lmo_ind_code, lmo_detailed_industry)|>
+  summarize(employment=sum(employment))|>
+  mutate(year=2021,
+         series="census")
+
+write_rds(census_by_industry, here("out","census_industry.rds"))
+openxlsx::write.xlsx(census_by_industry, here("out",paste0(Sys.time(),"_census_industry.xlsx")))
+
+#census by industry:region---------------------
+
+ census_with_noc_total|>
+  filter(noc_5=="Total")|>
+  inner_join(census_mapping)|>
+  group_by(bc_region, lmo_ind_code, lmo_detailed_industry)|>
+  summarize(employment=sum(employment))|>
+  mutate(year=2021,
+         series="census")|>
+   write_rds(here("out","census_industry_region.rds"))
+
+#census by occupation--------------------------
+
+census_with_noc_total|>
+  filter(noc_5!="Total",
+         census_column_heading=="Total - Industry - Groups - North American Industry Classification System (NAICS) 2017"
+         )|>
+  group_by(noc_5)|>
+  summarize(employment=sum(employment))|>
+  mutate(year=2021,
+         series="census")|>
+  write_rds(here("out","census_occupation.rds"))
+
+census <- census_with_noc_total|>
+  filter(noc_5!="Total")|>
   inner_join(census_mapping)|>
   group_by(bc_region, lmo_ind_code, lmo_detailed_industry, noc_5)|>
   summarize(employment=sum(employment, na.rm = TRUE))
@@ -319,42 +383,6 @@ lfs_shares <- left_join(lfs_base_share, regional_factor)|>
   mutate(lfs_share=adjusted_share/sum(adjusted_share, na.rm = TRUE))|> #make proportions sum to 1
   select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, lfs_share)
 
-#census by region-----------------------------
-census|>
-  group_by(bc_region)|>
-  summarize(employment=sum(employment))|>
-  mutate(year=2021,
-         series="census")|>
-  write_rds(here("out","census_region.rds"))
-
-#census by industry---------------------------
-
-census|>
-  group_by(lmo_ind_code, lmo_detailed_industry)|>
-  summarize(employment=sum(employment))|>
-  mutate(year=2021,
-         series="census")|>
-  write_rds(here("out","census_industry.rds"))
-
-#census by industry:region---------------------
-
-census|>
-  group_by(bc_region, lmo_ind_code, lmo_detailed_industry)|>
-  summarize(employment=sum(employment))|>
-  mutate(year=2021,
-         series="census")|>
-  write_rds(here("out","census_industry_region.rds"))
-
-
-#census by occupation--------------------------
-
-census|>
-  group_by(noc_5)|>
-  summarize(employment=sum(employment))|>
-  mutate(year=2021,
-         series="census")|>
-  write_rds(here("out","census_occupation.rds"))
-
 #calculate census shares-------------------
 
 census_base_share <- census|>
@@ -371,10 +399,6 @@ census_shares <- left_join(census_base_share, regional_factor)|>
   select(bc_region, noc_5, lmo_ind_code, lmo_detailed_industry, year, census_share)
 
 #write data to disk----------------------
-
-agg_and_save(lfs_no_aggregates, bc_region)
-agg_and_save(lfs_no_aggregates, lmo_ind_code, lmo_detailed_industry)
-agg_and_save(lfs_no_aggregates, noc_5)
 
 weighted_shares <- full_join(lfs_shares, census_shares)|>
   mutate(across(where(is.numeric), ~replace_na(.x, 0)),

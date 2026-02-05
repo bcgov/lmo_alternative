@@ -1,0 +1,20 @@
+file: RTRA3605872_stat0005p2.csv
+sha256: cfc8df0e7c6bd1c8dcf747c001c67afcbad822719ee92e6d2b8b6b288130de45
+size_bytes: 1.722747e+08
+n_rows: .na.integer
+n_cols: 5
+col_names:
+- SYEAR
+- BC_REGION
+- NAICS_5
+- NOC_5
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+- unknown
+- unknown
+created: 2026-02-03 13:00:06.68196
+semantic_name: stat0005p2.csv
+provenance: ~

@@ -1,0 +1,16 @@
+file: RTRA5762934_eureg.csv
+sha256: be3d0d9615598837c4b8ad94a5241e2dec3bb98dfb20dae38d0737456e95600c
+size_bytes: 1055.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- BC_REGION
+- LF_STAT
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+created: 2026-02-03 13:00:08.105192
+semantic_name: eureg.csv
+provenance: ~

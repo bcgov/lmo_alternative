@@ -1,6 +1,6 @@
 semantic_name: census_Nechako.csv
 preferred: raw
-raw: 2021_census_Nechako.csv
-parquet: ~
-meta_file: 2021_census_Nechako.csv.yml
-updated: 2026-01-31 18:48:54
+raw: 2021v2_census_Nechako.csv
+meta_file: 2021v2_census_Nechako.csv.yml
+sha256: 442ea9a671b3009973eff71eac21b237d2f6a2f791c0dd676f2191fa00805576
+updated: 2026-02-04 19:27:03

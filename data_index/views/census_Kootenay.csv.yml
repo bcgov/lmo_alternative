@@ -1,6 +1,6 @@
 semantic_name: census_Kootenay.csv
 preferred: raw
-raw: 2021_census_Kootenay.csv
-parquet: ~
-meta_file: 2021_census_Kootenay.csv.yml
-updated: 2026-01-31 18:48:54
+raw: 2021v2_census_Kootenay.csv
+meta_file: 2021v2_census_Kootenay.csv.yml
+sha256: 2e09d08a50585573a3c6d48ec8239eed816dd5c751ba3f7e9232541720c8c97d
+updated: 2026-02-04 19:27:03

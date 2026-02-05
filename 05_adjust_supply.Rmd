@@ -884,7 +884,7 @@ output$supply_demand <- renderDT({
 
 output$download_full <- downloadHandler(
   filename = function() {
-    paste0("supply_and_demand_", Sys.Date(), ".csv")
+    paste0(Sys.time(), "_supply_and_demand", ".csv")
   },
   content = function(file) {
     readr::write_csv(supply_and_demand_reactive(), file)

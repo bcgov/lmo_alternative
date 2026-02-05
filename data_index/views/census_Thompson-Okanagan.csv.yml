@@ -1,6 +1,6 @@
 semantic_name: census_Thompson-Okanagan.csv
 preferred: raw
-raw: 2021_census_Thompson-Okanagan.csv
-parquet: ~
-meta_file: 2021_census_Thompson-Okanagan.csv.yml
-updated: 2026-01-31 18:48:54
+raw: 2021v2_census_Thompson-Okanagan.csv
+meta_file: 2021v2_census_Thompson-Okanagan.csv.yml
+sha256: 0febf77dc4333e6b59e6411cf1e7a1e9afbd81dc3db20c03c8c0ae2be817203f
+updated: 2026-02-04 19:27:03

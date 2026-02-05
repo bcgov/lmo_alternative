@@ -23,8 +23,9 @@ conflicts_prefer(vroom::col_double)
 conflicts_prefer(vroom::col_character)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(plotly::layout)
-cagr_horizon <- 10
 options(scipen = 999)
+#constants------------------------------------
+cagr_span <- 10
 #functions--------------------------------------
 margin_plot <- function(tbbl, tbbl2, margin, title){
   plt <- ggplot()+
@@ -72,11 +73,19 @@ margin_plot <- function(tbbl, tbbl2, margin, title){
 get_total <- function(tbbl){
    sum(tbbl$employment)
  } 
-get_cagr <- function(tbbl, horizon){
-  max_year <- max(tbbl$year)
-  start <- tbbl$employment[tbbl$year==max_year-horizon]
-  end <-  tbbl$employment[tbbl$year==max_year]
-  if_else(start==0, NA_real_, (end/start)^(1/horizon)) 
+get_cagr <- function(tbbl, end_year, cagr_span) {
+  start <- tbbl$employment[tbbl$year == end_year - cagr_span]
+  end   <- tbbl$employment[tbbl$year == end_year]
+
+  if (length(start) != 1 || length(end) != 1) {
+    return(NA_real_)
+  }
+
+  if (start > 0 && !is.na(end)) {
+    (end / start)^(1 / cagr_span) - 1
+  } else {
+    NA_real_
+  }
 }
 occ_plot <- function(pg){
   plt <- bind_rows(occupation_historic, post_mod_occupation(), pre_mod_occupation())|> 
@@ -133,6 +142,7 @@ industry_mapping <- readxl::read_excel(resolve_current("industry_mapping_with_st
   filter(!str_detect(lmo_ind_code, "Total"))
 for_shrinkage_plot <- read_rds(here("out","for_shrinkage_plot.rds"))
 mod_shares <-  read_rds(here("out","modified","shares.rds")) #forecast shares, overwritten on each save
+forecast_end <- max(mod_shares$year)#used for cagr calculations
 bc_fcast <- read_rds(here("out","modified","bc_forecast.rds")) #the BC finance forecast plus 6 years.
 regions <- unique(mod_shares$bc_region)
 industries <- sort(unique(mod_shares$lmo_ind_code))
@@ -146,14 +156,18 @@ noc_descriptions <- vroom(resolve_current("noc_descriptions.csv"),
   mutate(noc_5=str_pad(noc_5, width=5, pad="0"))
 
 region_historic <- read_rds(here("out","historic_bc_region.rds"))
+historic_end <- max(region_historic$year) #used for historic cagr calculations
 industry_historic <- read_rds(here("out", "historic_lmo_ind_code.rds"))
 occupation_historic <- read_rds(here("out","historic_noc_5.rds"))|>
   left_join(noc_descriptions)|>
   arrange(noc_5)|>
+  group_by(noc_5)|>
+  nest()|> #nesting keeps all years of data for nocs together
+  ungroup()|>
   mutate(page=ntile(n=8))|>
   group_by(page)|>
-  mutate(page_description=paste0(min(noc_5),"-",max(noc_5)))|>
-  filter(noc_5 %in% occupations)
+  mutate(page_description=paste0(min(noc_5),"-", max(noc_5)))|>
+  unnest(data)
 
 noc_pages <- occupation_historic|> #by NOC aggregates need to be split across multiple pages.
   select(noc_5, class_title, page)|>
@@ -177,22 +191,19 @@ occupation_census <- read_rds(here("out","census_occupation.rds"))|>
 regional_historic_cagrs <- region_historic|>
   group_by(bc_region)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
-         historic_cagr=historic_cagr-1)|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, historic_end, cagr_span))|>
   select(-data)
 
 industry_historic_cagrs <- industry_historic|>
   group_by(lmo_ind_code)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
-         historic_cagr=historic_cagr-1)|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, historic_end, cagr_span))|>
   select(-data)
 
 occupation_historic_cagrs <- occupation_historic|>
   group_by(noc_5)|>
   nest()|>
-  mutate(historic_cagr=map_dbl(data, get_cagr, cagr_horizon),
-         historic_cagr=historic_cagr-1)|>
+  mutate(historic_cagr=map_dbl(data, get_cagr, historic_end, cagr_span))|>
   select(-data)
 ```
 
@@ -327,24 +338,21 @@ regional_mod_cagrs <- reactive({
   post_mod_region()|>
     group_by(bc_region)|>
     nest()|>
-    mutate(mod_cagr=map_dbl(data, get_cagr, 10),
-           mod_cagr=mod_cagr-1)|>
+    mutate(mod_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(bc_region, mod_cagr)
 })
 industry_mod_cagrs <- reactive({
   post_mod_industry()|>
     group_by(lmo_ind_code)|>
     nest()|>
-    mutate(mod_cagr=map_dbl(data, get_cagr, 10), 
-           mod_cagr=mod_cagr-1)|>
+    mutate(mod_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(lmo_ind_code, mod_cagr)
 })
 occupation_mod_cagrs <- reactive({
   post_mod_occupation()|>
     group_by(noc_5)|>
     nest()|>
-    mutate(mod_cagr=map_dbl(data, get_cagr, 10), 
-           mod_cagr=mod_cagr-1)|>
+    mutate(mod_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(noc_5, mod_cagr)      
 })
 # the CAGRs of the pre modification aggregate forecasts
@@ -352,24 +360,21 @@ regional_pre_cagrs <- reactive({
   pre_mod_region()|>
     group_by(bc_region)|>
     nest()|>
-    mutate(pre_cagr=map_dbl(data, get_cagr, 10),
-           pre_cagr=pre_cagr-1)|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(bc_region, pre_cagr)
 })
 industry_pre_cagrs <- reactive({
   pre_mod_industry()|>
     group_by(lmo_ind_code)|>
     nest()|>
-    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
-           pre_cagr=pre_cagr-1)|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(lmo_ind_code, pre_cagr)
 })
 occupation_pre_cagrs <- reactive({
   pre_mod_occupation()|>
     group_by(noc_5)|>
     nest()|>
-    mutate(pre_cagr=map_dbl(data, get_cagr, 10), 
-           pre_cagr=pre_cagr-1)|>
+    mutate(pre_cagr=map_dbl(data, get_cagr, forecast_end, cagr_span))|>
     select(noc_5, pre_cagr)      
 })
 #writing the modified proportions to disk

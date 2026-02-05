@@ -1,6 +1,6 @@
 semantic_name: agenaics.csv
 preferred: raw
-raw: RTRA8666029_agenaics.csv
-parquet: ~
-meta_file: RTRA8666029_agenaics.csv.yml
-updated: 2026-01-31 18:48:54
+raw: RTRA3605542_agenaics.csv
+meta_file: RTRA3605542_agenaics.csv.yml
+sha256: 38617289ba090784b9c270cbb12e5f03da39defe707c9f7fbfefb219f6392348
+updated: 2026-02-03 13:00:05

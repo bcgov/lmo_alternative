@@ -132,7 +132,7 @@ richs_forecast <- left_join(emp_and_diff, expand_ratio)|>
 
 #need to copy this over to new_industry_forecast, compare_excel, 4cast_viewer_comparison.
 write_rds(richs_forecast, here("out","richs_forecast.rds"))
-openxlsx::write.xlsx(richs_forecast, here("out", "richs_forecast.xlsx"))
+openxlsx::write.xlsx(richs_forecast, here("out", paste0(Sys.time(),"_richs_forecast.xlsx")))
 
 
 

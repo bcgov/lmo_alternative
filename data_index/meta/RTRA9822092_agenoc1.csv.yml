@@ -1,0 +1,16 @@
+file: RTRA9822092_agenoc1.csv
+sha256: 160b461907ed94e90ac4070c569b7c9a9b5ccce93f9f11b50e0fac35b4f25f95
+size_bytes: 11655.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- AGE_GROUP
+- NOC_5
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+created: 2026-02-03 13:00:11.158373
+semantic_name: agenoc1.csv
+provenance: ~

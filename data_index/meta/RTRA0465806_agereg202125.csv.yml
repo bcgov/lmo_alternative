@@ -1,0 +1,16 @@
+file: RTRA0465806_agereg202125.csv
+sha256: b7b6f7727e319de12f7cce3f499c6b72cf6ff338b26461208a7bb371d3732748
+size_bytes: 704.0
+n_rows: .na.integer
+n_cols: 3
+col_names:
+- BC_REGION
+- AGE_GROUP
+- _COUNT_
+col_types:
+- unknown
+- unknown
+- unknown
+created: 2026-02-03 13:00:05.18783
+semantic_name: agereg202125.csv
+provenance: ~

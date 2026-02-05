@@ -1,6 +1,6 @@
 semantic_name: census_Vancouver Island and Coast.csv
 preferred: raw
-raw: 2021_census_Vancouver Island and Coast.csv
-parquet: ~
-meta_file: 2021_census_Vancouver Island and Coast.csv.yml
-updated: 2026-01-31 18:48:54
+raw: 2021v2_census_Vancouver Island and Coast.csv
+meta_file: 2021v2_census_Vancouver Island and Coast.csv.yml
+sha256: bc9fbe9718c00f3b95356284e6c2b311c0a2945e74bce4ba24b7a5f0f72e110d
+updated: 2026-02-04 19:27:03

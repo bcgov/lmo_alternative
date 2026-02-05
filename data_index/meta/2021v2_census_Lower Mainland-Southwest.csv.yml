@@ -1,6 +1,6 @@
-file: 2021_census_Thompson-Okanagan.csv
-sha256: 3be3908ebdc9a71d3c3b9d6b47cc9bc15050fc63c383a1cab4080d6c7eb7875a
-size_bytes: 825710.0
+file: 2021v2_census_Lower Mainland-Southwest.csv
+sha256: 164392bd8a42cf6b8d8bc8901ce3b447c54bc733347e6b23647e16cec4d8c6c3
+size_bytes: 881903.0
 n_rows: .na.integer
 n_cols: 112
 col_names:
@@ -116,7 +116,7 @@ col_names:
 - '"        3252 Resin'
 - synthetic rubber
 - and artificial and synthetic fibres and filaments manufacturing"
-- '"        3253 P'
+- '"        3253 Pest'
 col_types:
 - unknown
 - unknown
@@ -230,6 +230,6 @@ col_types:
 - unknown
 - unknown
 - unknown
-created: 2026-01-29 17:03:05.188348
-semantic_name: census_Thompson-Okanagan.csv
+created: 2026-02-04 19:27:03.226999
+semantic_name: census_Lower Mainland-Southwest.csv
 provenance: ~
